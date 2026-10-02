@@ -56,10 +56,22 @@ if mode == 'build':
         path.mkdir()
         (path / 'trace.ml').write_text(source)
         (path / 'multidimensional.ml').write_text((root / 'test/multidimensional.ml.in').read_text())
+        (path / 'ops.ml').write_text((root / 'test/ops.ml.in').read_text())
         (path / 'dune-project').write_text('(lang dune 3.21)\n(using melange 1.0)\n')
         header = 'module Bigarray = ' + ('Melange_bigarray' if backend == 'melange' else 'Bigarray') + '\n'
         header += 'module Nativeint = ' + ('Melange_bigarray.Nativeint' if backend == 'melange' else 'Nativeint') + '\n'
         header += 'let trace_count = ' + str(count) + '\n'
+        if backend == 'melange':
+            header += 'module Ops = Melange_bigarray.Ops\n'
+        else:
+            header += """module Ops = struct
+ type packed = P : ('a,'b,'c) Bigarray.Genarray.t -> packed
+ let compare a b = Stdlib.compare (P a) (P b)
+ let equal a b = P a = P b
+ let hash a = Hashtbl.hash (P a)
+ let seeded_hash seed a = Hashtbl.seeded_hash seed (P a)
+end
+"""
         if half:
             ty = '(float, Bigarray.float16_elt, Bigarray.c_layout) Bigarray.Array1.t'
             if backend == 'melange':
@@ -104,7 +116,7 @@ let boundaries () =
             header += 'let boundaries () = ()\n'
         (path / 'backend.ml').write_text(header)
         if backend == 'native':
-            dune = '(executable (name trace) (modules trace backend multidimensional) (modes exe)'
+            dune = '(executable (name trace) (modules trace backend multidimensional ops) (modes exe)'
             if half:
                 dune += ' (foreign_stubs (language c) (names half_poke))'
                 (path / 'half_poke.c').write_text('''#include <stdint.h>
@@ -117,10 +129,10 @@ CAMLprim value oracle_half_poke(value a, value bits) {
 ''')
             dune += ')\n'
         elif backend == 'jsoo':
-            dune = '(executable (name trace) (modules trace backend multidimensional) (modes js) (js_of_ocaml (javascript_files oracle.js)))\n'
+            dune = '(executable (name trace) (modules trace backend multidimensional ops) (modes js) (js_of_ocaml (javascript_files oracle.js)))\n'
             (path / 'oracle.js').write_text('//Provides: oracle_half_poke\nfunction oracle_half_poke(a, bits) { a.data[0] = bits; return 0; }\n')
         else:
-            dune = '(melange.emit (target output) (modules trace backend multidimensional) (libraries melange-bigarray) (preprocess (pps melange.ppx)))\n'
+            dune = '(melange.emit (target output) (modules trace backend multidimensional ops) (libraries melange-bigarray) (preprocess (pps melange.ppx)))\n'
         (path / 'dune').write_text(dune)
         env = dict(os.environ, OCAMLPATH=str(prefix / 'lib'))
         command(['dune', 'build', '--root', str(path), '@all'], env=env)

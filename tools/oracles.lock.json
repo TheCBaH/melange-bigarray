@@ -162,5 +162,45 @@
     "revision": "08cd3ca8fcc9ec2a75ebacb5f86f336467cd2e6c",
     "sha256": "9f293b7981775189b283663e5cccf900d404631a452dca69a8d95e2cba1a880c",
     "repo": "melange-re/melange"
+  },
+  {
+    "repo": "dbuenzli/bytesrw",
+    "version": "0.3.0",
+    "path": "src/bytesrw.ml",
+    "url": "https://raw.githubusercontent.com/dbuenzli/bytesrw/347a5e9eaffb2f9b7015ea4aa13b98f959320b4a/src/bytesrw.ml",
+    "sha256": "fc9c04cad25c86095f2aceb673a771176736db2da4fe83a7dc74a27f1333b7f8",
+    "revision": "347a5e9eaffb2f9b7015ea4aa13b98f959320b4a"
+  },
+  {
+    "repo": "dbuenzli/bytesrw",
+    "version": "0.3.0",
+    "path": "src/bytesrw.mli",
+    "url": "https://raw.githubusercontent.com/dbuenzli/bytesrw/347a5e9eaffb2f9b7015ea4aa13b98f959320b4a/src/bytesrw.mli",
+    "sha256": "b924f27020dc378532f99704a983df09e9b548f9c1a210817fd29ef8d247b8da",
+    "revision": "347a5e9eaffb2f9b7015ea4aa13b98f959320b4a"
+  },
+  {
+    "repo": "dbuenzli/bytesrw",
+    "version": "0.3.0",
+    "path": "LICENSE.md",
+    "url": "https://raw.githubusercontent.com/dbuenzli/bytesrw/347a5e9eaffb2f9b7015ea4aa13b98f959320b4a/LICENSE.md",
+    "sha256": "a95c276ebb156fcc398f87acccdce56d40cb8ff1acc3dcb019b1166ee3ab4f15",
+    "revision": "347a5e9eaffb2f9b7015ea4aa13b98f959320b4a"
+  },
+  {
+    "repo": "dbuenzli/bytesrw",
+    "version": "0.3.0",
+    "path": "src/bytesrw_fmt.ml",
+    "url": "https://raw.githubusercontent.com/dbuenzli/bytesrw/347a5e9eaffb2f9b7015ea4aa13b98f959320b4a/src/bytesrw_fmt.ml",
+    "sha256": "c89f5dbf20811d39de5c8a2da20531a34b12f832cfb3c25c4b906ab401db3a66",
+    "revision": "347a5e9eaffb2f9b7015ea4aa13b98f959320b4a"
+  },
+  {
+    "repo": "dbuenzli/bytesrw",
+    "version": "0.3.0",
+    "path": "src/bytesrw_fmt.mli",
+    "url": "https://raw.githubusercontent.com/dbuenzli/bytesrw/347a5e9eaffb2f9b7015ea4aa13b98f959320b4a/src/bytesrw_fmt.mli",
+    "sha256": "8f4efd218c4778151c82b9f2d5b40f33cf1499c3b5a635b6d91e43149f8f3585",
+    "revision": "347a5e9eaffb2f9b7015ea4aa13b98f959320b4a"
   }
 ]

@@ -18,6 +18,9 @@ for marker, code in {
  'CODE': '| Float16 -> 13',
  'READ': '| Float16 -> half_decode (load t.data i)',
  'WRITE': '| Float16 -> store t.data i (half_encode value)',
+ 'COMPARE': '| Float16, Float16 -> Stdlib.compare (read a i) (read b i)',
+ 'EQUAL': '| Float16, Float16 -> read a i = read b i',
+ 'HASH': '| Float16 -> float_key value',
 }.items():
     s = s.replace('(* FLOAT16_' + marker + ' *)', code if half else '')
 if not half:
@@ -39,4 +42,21 @@ iface += '''\nmodule Nativeint : sig
  val to_string : nativeint -> string
 end
 '''
+iface += """
+module Interop : sig
+ type typed_array
+ val import_copy : ('a,'b) kind -> 'c layout -> int array -> 'js -> ('a,'b,'c) Genarray.t
+ val import_shared : ('a,'b) kind -> 'c layout -> int array -> 'js -> ('a,'b,'c) Genarray.t
+ val export_copy : ('a,'b,'c) Genarray.t -> typed_array
+ val export_shared : ('a,'b,'c) Genarray.t -> typed_array
+end
+"""
+iface += """
+module Ops : sig
+ val equal : ('a,'b,'c) Genarray.t -> ('d,'e,'f) Genarray.t -> bool
+ val compare : ('a,'b,'c) Genarray.t -> ('d,'e,'f) Genarray.t -> int
+ val hash : ('a,'b,'c) Genarray.t -> int
+ val seeded_hash : int -> ('a,'b,'c) Genarray.t -> int
+end
+"""
 pathlib.Path('melange_bigarray.mli').write_text(iface)

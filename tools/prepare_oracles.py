@@ -4,7 +4,8 @@ import pathlib
 import urllib.request
 
 root = pathlib.Path(__file__).resolve().parents[1]
-for entry in json.loads((root / "tools/oracles.lock.json").read_text()):
+entries = json.loads((root / "tools/oracles.lock.json").read_text())
+for entry in entries:
     repo = entry.get("repo", "ocaml/ocaml").replace("/", "-")
     target = root / ".cache/oracles" / repo / entry["version"] / entry["path"]
     if target.exists():
@@ -15,4 +16,4 @@ for entry in json.loads((root / "tools/oracles.lock.json").read_text()):
         raise RuntimeError("oracle source checksum mismatch: " + entry["url"])
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
-print("All 23 oracle/compiler sources verified")
+print(f"All {len(entries)} oracle/compiler/client sources verified")

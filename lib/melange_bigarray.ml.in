@@ -117,7 +117,7 @@ type (!'a, !'b, !'c) descriptor = {
   dims : int array;
   offset : int;
   count : int;
-  shared : bool;
+  shared : bool ref;
 }
 
 let attached : storage -> bool =
@@ -128,7 +128,7 @@ let attached : storage -> bool =
 }|}]
 
 let check_storage t =
-  if t.shared && not (attached t.data) then
+  if !(t.shared) && not (attached t.data) then
     invalid_arg "Bigarray: detached buffer"
 
 let create kind layout dimensions =
@@ -141,7 +141,7 @@ let create kind layout dimensions =
     dims;
     offset = 0;
     count;
-    shared = false;
+    shared = ref false;
   }
 
 let base : type c. c layout -> int = function
@@ -534,3 +534,201 @@ let reshape_0 t = reshape t [||]
 let reshape_1 t n = reshape t [| n |]
 let reshape_2 t n m = reshape t [| n; m |]
 let reshape_3 t n m o = reshape t [| n; m; o |]
+
+module Interop = struct
+  type typed_array = storage
+
+  let validate : int -> int -> int -> 'js -> storage option =
+    [%mel.raw
+      {|function(kind, length, alignment, value) {
+      try {
+        const proto = Object.getPrototypeOf(Uint8Array.prototype);
+        const get = name => Object.getOwnPropertyDescriptor(proto, name).get.call(value);
+        const buffer = get('buffer');
+        const offset = get('byteOffset');
+        const lanes = get('length');
+        const tag = Object.getOwnPropertyDescriptor(proto, Symbol.toStringTag).get.call(value);
+        const bufferBytes = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength').get.call(buffer);
+        const resizable = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'resizable');
+        if (resizable && resizable.get.call(buffer)) return undefined;
+        new Uint8Array(buffer, 0, 0);
+        const names = ['Float32Array','Float64Array','Int8Array','Uint8Array','Int16Array','Uint16Array',
+          'Int32Array','Int32Array','Int32Array','Int32Array','Float32Array','Float64Array','Uint8Array','Uint16Array'];
+        const constructors = [Float32Array,Float64Array,Int8Array,Uint8Array,Int16Array,Uint16Array,
+          Int32Array,Int32Array,Int32Array,Int32Array,Float32Array,Float64Array,Uint8Array,Uint16Array];
+        if (tag !== names[kind] || lanes !== length || offset % alignment !== 0 || bufferBytes > 0x3fffffff)
+          return undefined;
+        return new constructors[kind](buffer, offset, lanes);
+      } catch (_) { return undefined; }
+    }|}]
+
+  let import shared kind layout dimensions value =
+    let dims = Array.copy dimensions in
+    let count = checked_count (kind_size_in_bytes kind) dims in
+    let data =
+      match
+        validate (kind_code kind)
+          (count * lanes kind)
+          (kind_size_in_bytes kind) value
+      with
+      | None ->
+          invalid_arg "Bigarray.Interop: incompatible typed array or buffer"
+      | Some data -> data
+    in
+    if shared then
+      { data; kind; layout; dims; offset = 0; count; shared = ref true }
+    else
+      let result = create kind layout dims in
+      raw_blit data 0 result.data 0 (count * kind_size_in_bytes kind);
+      result
+
+  let import_copy kind layout dims value = import false kind layout dims value
+  let import_shared kind layout dims value = import true kind layout dims value
+
+  let storage_view : storage -> int -> int -> storage =
+    [%mel.raw
+      {|function(data, start, length) {
+      const constructors = {Float32Array,Float64Array,Int8Array,Uint8Array,Int16Array,Uint16Array,Int32Array};
+      const proto = Object.getPrototypeOf(Uint8Array.prototype);
+      const tag = Object.getOwnPropertyDescriptor(proto, Symbol.toStringTag).get.call(data);
+      return new constructors[tag](data.buffer, data.byteOffset + start * data.BYTES_PER_ELEMENT, length);
+    }|}]
+
+  let export_copy t =
+    check_storage t;
+    let data = allocate (kind_code t.kind) (t.count * lanes t.kind) in
+    raw_blit t.data
+      (t.offset * kind_size_in_bytes t.kind)
+      data 0
+      (t.count * kind_size_in_bytes t.kind);
+    data
+
+  let export_shared t =
+    check_storage t;
+    t.shared := true;
+    storage_view t.data (t.offset * lanes t.kind) (t.count * lanes t.kind)
+end
+
+module Ops = struct
+  let complex_compare a b =
+    let result = Stdlib.compare a.Complex.re b.Complex.re in
+    if result <> 0 then result else Stdlib.compare a.Complex.im b.Complex.im
+
+  let element_compare : type a b c d e f.
+      (a, b, c) descriptor -> (d, e, f) descriptor -> int -> int =
+   fun a b i ->
+    match (a.kind, b.kind) with
+    | Float32, Float32 -> Stdlib.compare (read a i) (read b i)
+    | Float64, Float64 -> Stdlib.compare (read a i) (read b i)
+    | Int8_signed, Int8_signed -> Stdlib.compare (read a i) (read b i)
+    | Int8_unsigned, Int8_unsigned -> Stdlib.compare (read a i) (read b i)
+    | Int16_signed, Int16_signed -> Stdlib.compare (read a i) (read b i)
+    | Int16_unsigned, Int16_unsigned -> Stdlib.compare (read a i) (read b i)
+    | Int32, Int32 -> Int32.compare (read a i) (read b i)
+    | Int64, Int64 -> Int64.compare (read a i) (read b i)
+    | Int, Int -> Stdlib.compare (read a i) (read b i)
+    | Nativeint, Nativeint -> Nativeint.compare (read a i) (read b i)
+    | Complex32, Complex32 -> complex_compare (read a i) (read b i)
+    | Complex64, Complex64 -> complex_compare (read a i) (read b i)
+    | Char, Char -> Char.compare (read a i) (read b i)
+    (* FLOAT16_COMPARE *)
+    | _ -> invalid_arg "Bigarray.Ops: incompatible kinds"
+
+  let element_equal : type a b c d e f.
+      (a, b, c) descriptor -> (d, e, f) descriptor -> int -> bool =
+   fun a b i ->
+    match (a.kind, b.kind) with
+    | Float32, Float32 -> read a i = read b i
+    | Float64, Float64 -> read a i = read b i
+    | Complex32, Complex32 ->
+        let x = read a i in
+        let y = read b i in
+        x.Complex.re = y.Complex.re && x.Complex.im = y.Complex.im
+    | Complex64, Complex64 ->
+        let x = read a i in
+        let y = read b i in
+        x.Complex.re = y.Complex.re && x.Complex.im = y.Complex.im
+    (* FLOAT16_EQUAL *)
+    | _ -> element_compare a b i = 0
+
+  let flags t = kind_code t.kind lor (base t.layout lsl 8)
+
+  let metadata a b =
+    let result = flags b - flags a in
+    if result <> 0 then result
+    else
+      let result = Array.length b.dims - Array.length a.dims in
+      if result <> 0 then result
+      else
+        let result = ref 0 in
+        let i = ref 0 in
+        while !result = 0 && !i < Array.length a.dims do
+          result := Stdlib.compare a.dims.(!i) b.dims.(!i);
+          incr i
+        done;
+        !result
+
+  let compare a b =
+    check_storage a;
+    check_storage b;
+    let result = ref (metadata a b) in
+    let i = ref 0 in
+    while !result = 0 && !i < a.count do
+      result := element_compare a b !i;
+      incr i
+    done;
+    !result
+
+  let equal a b =
+    check_storage a;
+    check_storage b;
+    if metadata a b <> 0 then false
+    else
+      let result = ref true in
+      let i = ref 0 in
+      while !result && !i < a.count do
+        result := element_equal a b !i;
+        incr i
+      done;
+      !result
+
+  let float_key value =
+    if Float.is_nan value then "nan"
+    else if value = 0. then "0"
+    else Printf.sprintf "%016Lx" (Int64.bits_of_float value)
+
+  let value_key : type a b. (a, b) kind -> a -> string =
+   fun kind value ->
+    match kind with
+    | Float32 -> float_key value
+    | Float64 -> float_key value
+    | Int8_signed -> string_of_int value
+    | Int8_unsigned -> string_of_int value
+    | Int16_signed -> string_of_int value
+    | Int16_unsigned -> string_of_int value
+    | Int32 -> Int32.to_string value
+    | Int64 -> Int64.to_string value
+    | Int -> string_of_int value
+    | Nativeint -> Nativeint.to_string value
+    | Complex32 -> float_key value.Complex.re ^ "," ^ float_key value.Complex.im
+    | Complex64 -> float_key value.Complex.re ^ "," ^ float_key value.Complex.im
+    | Char -> string_of_int (Char.code value)
+  (* FLOAT16_HASH *)
+
+  let mix : int -> int -> int =
+    [%mel.raw {|function(h,n) { return Math.imul(h ^ n, 16777619) | 0; }|}]
+
+  let seeded_hash seed t =
+    check_storage t;
+    let state = ref (mix seed (flags t)) in
+    state := mix !state (Array.length t.dims);
+    Array.iter (fun dimension -> state := mix !state dimension) t.dims;
+    for i = 0 to t.count - 1 do
+      let value = value_key t.kind (read t i) in
+      String.iter (fun c -> state := mix !state (Char.code c)) value;
+      state := mix !state 256
+    done;
+    !state land 0x3fffffff
+
+  let hash t = seeded_hash 0 t
+end

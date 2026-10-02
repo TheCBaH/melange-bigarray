@@ -37,8 +37,11 @@ tree.check:
 traces.build: build
 	BUILD_DIR=$(BUILD_DIR) $(OPAM) exec -- $(PYTHON) tools/traces.py build
 test.node: traces.build
+	OCAML_VERSION=$(OCAML_VERSION) timeout 120 $(NODE) --max-old-space-size=256 tools/extensions_node.cjs
 	BUILD_DIR=$(BUILD_DIR) $(OPAM) exec -- $(PYTHON) tools/traces.py node
-test.browser: traces.build
+clients.build: traces.build
+	$(OPAM) exec -- $(PYTHON) tools/clients.py
+test.browser: clients.build
 	OCAML_VERSION=$(OCAML_VERSION) timeout 180 $(NODE) tools/browser.cjs
 test.differential: test.node test.browser
 	$(OPAM) exec -- $(PYTHON) tools/api_coverage.py

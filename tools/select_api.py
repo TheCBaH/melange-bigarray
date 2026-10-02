@@ -1,15 +1,42 @@
 import pathlib
+import re
 import sys
 
-half = int(sys.argv[1].split(".")[0]) >= 5
-for suffix in ["ml", "mli"]:
-    s = pathlib.Path("melange_bigarray." + suffix + ".in").read_text()
-    if half:
-        s = s.replace("type float32_elt", "type float16_elt = Float16_elt\ntype float32_elt", 1)
-        s = s.replace(" | Float32", " | Float16 : (float, float16_elt) kind\n | Float32", 1)
-        if suffix == "ml":
-            s = s.replace("let float64", "let float16 = Float16\nlet float64", 1)
-            s = s.replace("| Float32 ->", "| Float16 -> 0.\n      | Float32 ->", 1)
-        else:
-            s = s.replace("val float64", "val float16 : (float,float16_elt) kind\nval float64", 1)
-    pathlib.Path("melange_bigarray." + suffix).write_text(s)
+root = pathlib.Path(__file__).resolve().parents[1]
+version = sys.argv[1]
+half = int(version.split('.')[0]) >= 5
+api_version = '4.14.4' if not half else '5.2.1' if version.startswith('5.2.') else '5.3.0'
+api = (root / 'api' / (api_version + '.mli')).read_text()
+types = api[:api.index('val float')]
+layouts = api[api.index('type c_layout'):api.index('module Genarray')]
+layouts = re.sub(r'val\s+\w+\s*:[^\n]*', '', layouts)
+constructors = re.findall(r'\| (\w+)\s*:', types)
+values = '\n'.join('let ' + c.lower() + ' = ' + c for c in constructors)
+values += '\nlet c_layout = C_layout\nlet fortran_layout = Fortran_layout\n'
+s = pathlib.Path('melange_bigarray.ml.in').read_text().replace('(* TYPES *)', types + layouts + values)
+for marker, code in {
+ 'CODE': '| Float16 -> 13',
+ 'READ': '| Float16 -> half_decode (load t.data i)',
+ 'WRITE': '| Float16 -> store t.data i (half_encode value)',
+}.items():
+    s = s.replace('(* FLOAT16_' + marker + ' *)', code if half else '')
+if not half:
+    s = re.sub(r'let half_decode[\s\S]*?(?=let kind_code)', '', s)
+pathlib.Path('melange_bigarray.ml').write_text(s)
+iface = re.sub(r'external(\s+\w+\s*:[\s\S]*?)=\s*"[^"]*"', r'val\1', api)
+iface += '''\nmodule Nativeint : sig
+ val of_int : int -> nativeint
+ val to_int : nativeint -> int
+ val of_int32 : int32 -> nativeint
+ val to_int32 : nativeint -> int32
+ val add : nativeint -> nativeint -> nativeint
+ val sub : nativeint -> nativeint -> nativeint
+ val mul : nativeint -> nativeint -> nativeint
+ val neg : nativeint -> nativeint
+ val compare : nativeint -> nativeint -> int
+ val equal : nativeint -> nativeint -> bool
+ val of_string : string -> nativeint
+ val to_string : nativeint -> string
+end
+'''
+pathlib.Path('melange_bigarray.mli').write_text(iface)

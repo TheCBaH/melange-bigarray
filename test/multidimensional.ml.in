@@ -141,46 +141,45 @@ let exercise : type a b c. string -> (a,b) B.kind -> c B.layout -> (int -> a) ->
 let property : type a b c. int -> (int -> int) -> (a,b) B.kind -> c B.layout -> (int -> a) -> (a -> string) -> unit =
  fun id random kind layout value encode ->
   let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
-  let n = Backend.shape "matrix" 0 (random 4) in
-  let m = Backend.shape "matrix" 1 (random 5) in
+  let n = random 4 in
+  let m = random 5 in
   let a = B.Array2.init kind layout n m (fun i j -> value (10*i+j)) in
   let g = B.genarray_of_array2 a in
   let operations = 8 + random 16 in
-  for step = 1 to operations do
+  for _ = 1 to operations do
     if n = 0 || m = 0 then (
-      Backend.perform "matrix" step (fun () ->
-        B.Genarray.fill (B.reshape g [|0|]) (value 0); B.Genarray.blit g g))
+      B.Genarray.fill (B.reshape g [|0|]) (value 0);
+      B.Genarray.blit g g)
     else
       match random 5 with
       | 0 ->
           let i = base + random n in
           let j = base + random m in
           let next = value (random 65535 - 32768) in
-          Backend.perform "matrix" step (fun () -> B.Array2.set a i j next)
+          B.Array2.set a i j next
       | 1 ->
           let dimension = match layout with B.C_layout -> n | B.Fortran_layout -> m in
           let size = random (dimension+1) in
           let start = base + random (dimension-size+1) in
           let next = value (random 65535 - 32768) in
-          Backend.perform "matrix" step (fun () -> match layout with
+          (match layout with
            | B.C_layout -> B.Array2.fill (B.Array2.sub_left a start size) next
            | B.Fortran_layout -> B.Array2.fill (B.Array2.sub_right a start size) next)
       | 2 ->
           let dimension = match layout with B.C_layout -> n | B.Fortran_layout -> m in
           let coordinate = base + random dimension in
           let next = value (random 65535 - 32768) in
-          Backend.perform "matrix" step (fun () -> match layout with
+          (match layout with
            | B.C_layout -> B.Array1.fill (B.Array2.slice_left a coordinate) next
            | B.Fortran_layout -> B.Array1.fill (B.Array2.slice_right a coordinate) next)
       | 3 ->
           let index = base + random (n*m) in
           let next = value (random 65535 - 32768) in
-          Backend.perform "matrix" step (fun () -> B.Array1.set (B.reshape_1 g (n*m)) index next)
+          B.Array1.set (B.reshape_1 g (n*m)) index next
       | _ ->
           let next = value (random 65535 - 32768) in
-          Backend.perform "matrix" step (fun () ->
-            let changed = B.Genarray.change_layout g B.c_layout in
-            B.Genarray.set changed [|0;0|] next)
+          let changed = B.Genarray.change_layout g B.c_layout in
+          B.Genarray.set changed [|0;0|] next
   done;
   let peer = B.Array2.create kind layout n m in
   B.Array2.blit a peer;

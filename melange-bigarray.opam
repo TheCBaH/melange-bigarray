@@ -4,7 +4,7 @@ maintainer: "Vladimir Silyaev"
 authors: "Vladimir Silyaev"
 x-ai-disclosure: "ai-generated"
 x-ai-provider: "Anthropic, OpenAI"
-license: "MIT"
+license: ["MIT" "LGPL-2.1-only WITH OCaml-LGPL-linking-exception"]
 homepage: "https://github.com/TheCBaH/melange-bigarray"
 bug-reports: "https://github.com/TheCBaH/melange-bigarray/issues"
 dev-repo: "git+https://github.com/TheCBaH/melange-bigarray.git"

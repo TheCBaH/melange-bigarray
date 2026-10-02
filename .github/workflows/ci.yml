@@ -35,7 +35,7 @@ jobs:
           username: ${{ github.actor }}
           password: ''
       - name: Compatibility and standalone installation
-        run: ${{ steps.container.outputs.exec }} make ci
+        run: ${{ steps.container.outputs.exec }} make deps ci
       - name: Evidence
         if: always()
         uses: actions/upload-artifact@v6

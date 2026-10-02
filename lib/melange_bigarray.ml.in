@@ -4,79 +4,533 @@
 module Nativeint = struct
   external of_int : int -> nativeint = "%nativeint_of_int"
   external to_int : nativeint -> int = "%nativeint_to_int"
+  external of_int32 : int32 -> nativeint = "%nativeint_of_int32"
+  external to_int32 : nativeint -> int32 = "%nativeint_to_int32"
   external add : nativeint -> nativeint -> nativeint = "%nativeint_add"
+  external sub : nativeint -> nativeint -> nativeint = "%nativeint_sub"
+  external mul : nativeint -> nativeint -> nativeint = "%nativeint_mul"
+  external neg : nativeint -> nativeint = "%nativeint_neg"
+
+  let compare a b = Stdlib.compare (to_int a) (to_int b)
+  let equal a b = to_int a = to_int b
+  let of_string s = of_int32 (Int32.of_string s)
+  let to_string n = string_of_int (to_int n)
 end
 
-type float32_elt = Float32_elt
-type float64_elt = Float64_elt
-type int8_unsigned_elt = Int8_unsigned_elt
-type nativeint_elt = Nativeint_elt
-type complex64_elt = Complex64_elt
+(* TYPES *)
 
-type (_, _) kind =
-  | Float32 : (float, float32_elt) kind
-  | Float64 : (float, float64_elt) kind
-  | Char : (char, int8_unsigned_elt) kind
-  | Nativeint : (nativeint, nativeint_elt) kind
-  | Complex64 : (Complex.t, complex64_elt) kind
+type storage
 
-type c_layout = C_layout_tag
-type fortran_layout = Fortran_layout_tag
+external load : storage -> int -> 'a = "" [@@mel.get_index]
+external store : storage -> int -> 'a -> unit = "" [@@mel.set_index]
 
-type _ layout =
-  | C_layout : c_layout layout
-  | Fortran_layout : fortran_layout layout
+let allocate : int -> int -> storage =
+  [%mel.raw
+    {|function(kind, length) {
+  const constructors = [Float32Array, Float64Array, Int8Array, Uint8Array,
+    Int16Array, Uint16Array, Int32Array, Int32Array, Int32Array, Int32Array,
+    Float32Array, Float64Array, Uint8Array, Uint16Array];
+  return new constructors[kind](length);
+}|}]
 
-let float64 = Float64
-let char = Char
-let nativeint = Nativeint
-let complex64 = Complex64
-let c_layout = C_layout
-let fortran_layout = Fortran_layout
+let half_decode : int -> float =
+  [%mel.raw
+    {|function(bits) {
+  const sign = (bits & 0x8000) === 0 ? 1 : -1;
+  const exponent = (bits >>> 10) & 31;
+  const fraction = bits & 1023;
+  if (exponent === 31) return fraction ? NaN : sign * Infinity;
+  if (exponent === 0) return sign * fraction * Math.pow(2, -24);
+  return sign * (1024 + fraction) * Math.pow(2, exponent - 25);
+}|}]
 
-module Genarray = struct
-  type (!'a, !'b, !'c) t = {
-    kind : ('a, 'b) kind;
-    layout : 'c layout;
-    data : 'a array;
+let half_encode : float -> int =
+  [%mel.raw
+    {|function(value) {
+  const rounded = Math.fround(value);
+  const sign = rounded < 0 || Object.is(rounded, -0) ? 0x8000 : 0;
+  const x = Math.abs(rounded);
+  if (Number.isNaN(x)) return 0x7e00;
+  if (!Number.isFinite(x)) return sign | 0x7c00;
+  function even(n) {
+    const lower = Math.floor(n), rest = n - lower;
+    return lower + (rest > 0.5 || (rest === 0.5 && (lower & 1)) ? 1 : 0);
+  }
+  if (x < Math.pow(2, -14)) return sign | even(x * Math.pow(2, 24));
+  let exponent = Math.floor(Math.log2(x));
+  let significand = even(x / Math.pow(2, exponent) * 1024);
+  if (significand === 2048) { exponent++; significand = 1024; }
+  if (exponent > 15) return sign | 0x7c00;
+  return sign | ((exponent + 15) << 10) | (significand - 1024);
+}|}]
+
+let kind_code : type a b. (a, b) kind -> int = function
+  | Float32 -> 0
+  | Float64 -> 1
+  | Int8_signed -> 2
+  | Int8_unsigned -> 3
+  | Int16_signed -> 4
+  | Int16_unsigned -> 5
+  | Int32 -> 6
+  | Int64 -> 7
+  | Int -> 8
+  | Nativeint -> 9
+  | Complex32 -> 10
+  | Complex64 -> 11
+  | Char -> 12
+(* FLOAT16_CODE *)
+
+let kind_size_in_bytes k =
+  match kind_code k with
+  | 0 | 6 | 8 | 9 -> 4
+  | 1 | 7 | 10 -> 8
+  | 2 | 3 | 12 -> 1
+  | 4 | 5 | 13 -> 2
+  | _ -> 16
+
+let lanes k = match kind_code k with 7 | 10 | 11 -> 2 | _ -> 1
+let byte_limit = 0x3fffffff
+
+let valid_dimension : int -> bool =
+  [%mel.raw
+    {|function(d) { return Number.isInteger(d) && d >= 0 && d <= 0x7fffffff; }|}]
+
+let checked_count size dims =
+  if Array.length dims > 16 then invalid_arg "Bigarray: rank exceeds 16";
+  Array.iter
+    (fun d ->
+      if not (valid_dimension d) then invalid_arg "Bigarray: invalid dimension")
+    dims;
+  if Array.exists (( = ) 0) dims then 0
+  else
+    Array.fold_left
+      (fun count dim ->
+        if count > byte_limit / size / dim then
+          invalid_arg "Bigarray: size exceeds byte limit";
+        count * dim)
+      1 dims
+
+type (!'a, !'b, !'c) descriptor = {
+  data : storage;
+  kind : ('a, 'b) kind;
+  layout : 'c layout;
+  dims : int array;
+  offset : int;
+  count : int;
+  shared : bool;
+}
+
+let attached : storage -> bool =
+  [%mel.raw
+    {|function(data) {
+  try { new Uint8Array(data.buffer, 0, 0); return true; }
+  catch (_) { return false; }
+}|}]
+
+let check_storage t =
+  if t.shared && not (attached t.data) then
+    invalid_arg "Bigarray: detached buffer"
+
+let create kind layout dimensions =
+  let dims = Array.copy dimensions in
+  let count = checked_count (kind_size_in_bytes kind) dims in
+  {
+    data = allocate (kind_code kind) (count * lanes kind);
+    kind;
+    layout;
+    dims;
+    offset = 0;
+    count;
+    shared = false;
   }
 
-  let create : type a b c. (a, b) kind -> c layout -> int array -> (a, b, c) t =
-   fun kind layout dims ->
-    let zero : a =
-      match kind with
-      | Float32 -> 0.
-      | Float64 -> 0.
-      | Char -> '\000'
-      | Nativeint -> Nativeint.of_int 0
-      | Complex64 -> Complex.zero
-    in
-    { kind; layout; data = Array.make (Array.fold_left ( * ) 1 dims) zero }
+let base : type c. c layout -> int = function
+  | C_layout -> 0
+  | Fortran_layout -> 1
 
-  let get t _ = t.data.(0)
-  let set t _ v = t.data.(0) <- v
+let read : type a b c. (a, b, c) descriptor -> int -> a =
+ fun t index ->
+  check_storage t;
+  let i = t.offset + index in
+  match t.kind with
+  | Int64 ->
+      let low : int32 = load t.data (2 * i) in
+      let high : int32 = load t.data ((2 * i) + 1) in
+      Int64.logor
+        (Int64.shift_left (Int64.of_int32 high) 32)
+        (Int64.logand (Int64.of_int32 low) 0xffffffffL)
+  | Complex32 ->
+      { Complex.re = load t.data (2 * i); im = load t.data ((2 * i) + 1) }
+  | Complex64 ->
+      { Complex.re = load t.data (2 * i); im = load t.data ((2 * i) + 1) }
+  | Char -> Char.chr (load t.data i)
+  | Float32 -> load t.data i
+  | Float64 -> load t.data i
+  | Int8_signed -> load t.data i
+  | Int8_unsigned -> load t.data i
+  | Int16_signed -> load t.data i
+  | Int16_unsigned -> load t.data i
+  | Int32 -> load t.data i
+  | Int -> load t.data i
+  | Nativeint -> load t.data i
+(* FLOAT16_READ *)
+
+let write : type a b c. (a, b, c) descriptor -> int -> a -> unit =
+ fun t index value ->
+  check_storage t;
+  let i = t.offset + index in
+  match t.kind with
+  | Int64 ->
+      store t.data (2 * i) (Int64.to_int32 value);
+      store t.data
+        ((2 * i) + 1)
+        (Int64.to_int32 (Int64.shift_right_logical value 32))
+  | Complex32 ->
+      store t.data (2 * i) value.Complex.re;
+      store t.data ((2 * i) + 1) value.Complex.im
+  | Complex64 ->
+      store t.data (2 * i) value.Complex.re;
+      store t.data ((2 * i) + 1) value.Complex.im
+  | Char -> store t.data i (Char.code value)
+  | Float32 -> store t.data i value
+  | Float64 -> store t.data i value
+  | Int8_signed -> store t.data i value
+  | Int8_unsigned -> store t.data i value
+  | Int16_signed -> store t.data i value
+  | Int16_unsigned -> store t.data i value
+  | Int32 -> store t.data i value
+  | Int -> store t.data i value
+  | Nativeint -> store t.data i value
+(* FLOAT16_WRITE *)
+
+let coordinate t axis index =
+  if index < base t.layout then invalid_arg "Bigarray: index out of bounds";
+  let i = index - base t.layout in
+  if i < 0 || i >= t.dims.(axis) then
+    invalid_arg "Bigarray: index out of bounds";
+  i
+
+let offset : type a b c. (a, b, c) descriptor -> int array -> int =
+ fun t indices ->
+  let rank = Array.length t.dims in
+  if Array.length indices <> rank then
+    invalid_arg "Bigarray: wrong number of indices";
+  Array.iteri (fun axis i -> ignore (coordinate t axis i)) indices;
+  let result = ref 0 in
+  (match t.layout with
+  | C_layout ->
+      for axis = 0 to rank - 1 do
+        result := (!result * t.dims.(axis)) + (indices.(axis) - base t.layout)
+      done
+  | Fortran_layout ->
+      for axis = rank - 1 downto 0 do
+        result := (!result * t.dims.(axis)) + (indices.(axis) - base t.layout)
+      done);
+  !result
+
+let replicate : storage -> int -> int -> int -> unit =
+  [%mel.raw
+    {|function(data, start, count, lanes) {
+  const end = start + count * lanes;
+  if (lanes === 1) data.fill(data[start], start, end);
+  else {
+    const a = data[start], b = data[start+1];
+    for (let i = start; i < end; i += 2) { data[i] = a; data[i+1] = b; }
+  }
+}|}]
+
+let fill t value =
+  check_storage t;
+  if t.count <> 0 then (
+    write t 0 value;
+    replicate t.data (t.offset * lanes t.kind) t.count (lanes t.kind))
+
+let raw_blit : storage -> int -> storage -> int -> int -> unit =
+  [%mel.raw
+    {|function(src, from, dst, to, bytes) {
+  const a = new Uint8Array(src.buffer, src.byteOffset + from, bytes);
+  const b = new Uint8Array(dst.buffer, dst.byteOffset + to, bytes);
+  b.set(a);
+}|}]
+
+let blit src dst =
+  check_storage src;
+  check_storage dst;
+  if
+    src.dims <> dst.dims
+    || kind_code src.kind <> kind_code dst.kind
+    || base src.layout <> base dst.layout
+  then invalid_arg "Bigarray.blit: kind/layout/dimension mismatch";
+  let size = kind_size_in_bytes src.kind in
+  raw_blit src.data (src.offset * size) dst.data (dst.offset * size)
+    (src.count * size)
+
+let view t dims start =
+  check_storage t;
+  let count = checked_count (kind_size_in_bytes t.kind) dims in
+  if start < 0 || start > t.count || count > t.count - start then
+    invalid_arg "Bigarray: view exceeds extent";
+  { t with dims = Array.copy dims; offset = t.offset + start; count }
+
+let sub t position length =
+  let rank = Array.length t.dims in
+  if rank = 0 then invalid_arg "Bigarray.sub: scalar";
+  let axis = if base t.layout = 0 then 0 else rank - 1 in
+  if position < base t.layout then invalid_arg "Bigarray.sub: bad sub-array";
+  let start = position - base t.layout in
+  if
+    start < 0 || length < 0
+    || start > t.dims.(axis)
+    || length > t.dims.(axis) - start
+  then invalid_arg "Bigarray.sub: bad sub-array";
+  let dims = Array.copy t.dims in
+  dims.(axis) <- length;
+  let stride = if t.count = 0 then 0 else t.count / t.dims.(axis) in
+  view t dims (start * stride)
+
+let slice t indices =
+  let rank = Array.length t.dims in
+  let n = Array.length indices in
+  if n > rank then invalid_arg "Bigarray.slice: too many indices";
+  let first = if base t.layout = 0 then 0 else rank - n in
+  let all = Array.make rank (base t.layout) in
+  Array.blit indices 0 all first n;
+  let start = offset t all in
+  let dims =
+    if first = 0 && base t.layout = 0 then Array.sub t.dims n (rank - n)
+    else Array.sub t.dims 0 (rank - n)
+  in
+  view t dims start
+
+let change_layout : type a b c d.
+    (a, b, c) descriptor -> d layout -> (a, b, d) descriptor =
+ fun t layout ->
+  check_storage t;
+  let reversed () =
+    Array.init (Array.length t.dims) (fun i ->
+        t.dims.(Array.length t.dims - 1 - i))
+  in
+  match (t.layout, layout) with
+  | C_layout, C_layout -> t
+  | Fortran_layout, Fortran_layout -> t
+  | C_layout, Fortran_layout -> { t with layout; dims = reversed () }
+  | Fortran_layout, C_layout -> { t with layout; dims = reversed () }
+
+let reshape t dims =
+  let result = view t dims 0 in
+  if result.count <> t.count then invalid_arg "Bigarray.reshape: size mismatch";
+  result
+
+module Genarray = struct
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) descriptor
+
+  let create = create
+  let num_dims t = Array.length t.dims
+  let dims t = Array.copy t.dims
+
+  let nth_dim t axis =
+    if axis < 0 || axis >= num_dims t then
+      invalid_arg "Bigarray.nth_dim: bad dimension";
+    t.dims.(axis)
+
+  let kind t = t.kind
+  let layout t = t.layout
+  let size_in_bytes t = t.count * kind_size_in_bytes t.kind
+  let get t indices = read t (offset t indices)
+  let set t indices value = write t (offset t indices) value
+  let fill = fill
+  let blit = blit
+  let sub_left = sub
+  let sub_right = sub
+  let slice_left = slice
+  let slice_right = slice
+  let change_layout = change_layout
+
+  let init kind layout dims f =
+    let t = create kind layout dims in
+    let indices = Array.make (Array.length dims) (base layout) in
+    for i = 0 to t.count - 1 do
+      write t i (f (Array.copy indices));
+      let axis = ref (if base layout = 0 then Array.length dims - 1 else 0) in
+      let carry = ref true in
+      while !carry && !axis >= 0 && !axis < Array.length dims do
+        indices.(!axis) <- indices.(!axis) + 1;
+        if indices.(!axis) - base layout = t.dims.(!axis) then (
+          indices.(!axis) <- base layout;
+          axis := !axis + if base layout = 0 then -1 else 1)
+        else carry := false
+      done
+    done;
+    t
+end
+
+module Array0 = struct
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) descriptor
+
+  let create k l = create k l [||]
+  let kind = Genarray.kind
+  let layout = Genarray.layout
+  let size_in_bytes = Genarray.size_in_bytes
+  let get t = read t 0
+  let set t value = write t 0 value
+  let fill = fill
+  let blit = blit
+  let change_layout = change_layout
+
+  let init k l value =
+    let t = create k l in
+    set t value;
+    t
+
+  let of_value = init
 end
 
 module Array1 = struct
-  type (!'a, !'b, !'c) t = ('a, 'b, 'c) Genarray.t
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) descriptor
 
-  let create k l n = Genarray.create k l [| n |]
-  let get t _ = Genarray.get t [||]
-  let set t _ = Genarray.set t [||]
+  let create k l n = create k l [| n |]
+  let kind = Genarray.kind
+  let layout = Genarray.layout
+  let dim t = t.dims.(0)
+  let size_in_bytes = Genarray.size_in_bytes
+  let get t i = read t (coordinate t 0 i)
+  let set t i value = write t (coordinate t 0 i) value
+  let unsafe_get t i = read t (i - base t.layout)
+  let unsafe_set t i value = write t (i - base t.layout) value
+  let fill = fill
+  let blit = blit
+  let sub = sub
+  let slice t i = slice t [| i |]
+  let change_layout = change_layout
+
+  let init k l n f =
+    let t = create k l n in
+    for i = 0 to n - 1 do
+      write t i (f (i + base l))
+    done;
+    t
+
+  let of_array k l values =
+    init k l (Array.length values) (fun i -> values.(i - base l))
 end
 
-module Array2 = struct
-  type (!'a, !'b, !'c) t = ('a, 'b, 'c) Genarray.t
+let index2 t i j =
+  let x = coordinate t 0 i in
+  let y = coordinate t 1 j in
+  if base t.layout = 0 then (x * t.dims.(1)) + y else (y * t.dims.(0)) + x
 
-  let create k l n m = Genarray.create k l [| n; m |]
-  let get t _ _ = Genarray.get t [||]
-  let set t _ _ = Genarray.set t [||]
+let index3 t i j k =
+  let x = coordinate t 0 i in
+  let y = coordinate t 1 j in
+  let z = coordinate t 2 k in
+  if base t.layout = 0 then (((x * t.dims.(1)) + y) * t.dims.(2)) + z
+  else (((z * t.dims.(1)) + y) * t.dims.(0)) + x
+
+let unsafe_index2 t i j =
+  let b = base t.layout in
+  if b = 0 then (i * t.dims.(1)) + j else ((j - b) * t.dims.(0)) + i - b
+
+let unsafe_index3 t i j k =
+  let b = base t.layout in
+  if b = 0 then (((i * t.dims.(1)) + j) * t.dims.(2)) + k
+  else ((((k - b) * t.dims.(1)) + j - b) * t.dims.(0)) + i - b
+
+module Array2 = struct
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) descriptor
+
+  let create k l n m = create k l [| n; m |]
+  let dim1 t = t.dims.(0)
+  let dim2 t = t.dims.(1)
+  let kind = Genarray.kind
+  let layout = Genarray.layout
+  let size_in_bytes = Genarray.size_in_bytes
+  let get t i j = read t (index2 t i j)
+  let set t i j value = write t (index2 t i j) value
+  let unsafe_get t i j = read t (unsafe_index2 t i j)
+  let unsafe_set t i j value = write t (unsafe_index2 t i j) value
+  let fill = fill
+  let blit = blit
+  let sub_left = sub
+  let sub_right = sub
+  let slice_left t i = slice t [| i |]
+  let slice_right t j = slice t [| j |]
+  let change_layout = change_layout
+
+  let init k l n m f =
+    Genarray.init k l [| n; m |] (fun indices -> f indices.(0) indices.(1))
+
+  let of_array k l values =
+    let n = Array.length values in
+    let m = if n = 0 then 0 else Array.length values.(0) in
+    Array.iter
+      (fun row ->
+        if Array.length row <> m then
+          invalid_arg "Bigarray.Array2.of_array: ragged")
+      values;
+    let b = base l in
+    init k l n m (fun i j -> values.(i - b).(j - b))
 end
 
 module Array3 = struct
-  type (!'a, !'b, !'c) t = ('a, 'b, 'c) Genarray.t
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) descriptor
 
-  let create k l n m o = Genarray.create k l [| n; m; o |]
-  let get t _ _ _ = Genarray.get t [||]
-  let set t _ _ _ = Genarray.set t [||]
+  let create k l n m o = create k l [| n; m; o |]
+  let dim1 t = t.dims.(0)
+  let dim2 t = t.dims.(1)
+  let dim3 t = t.dims.(2)
+  let kind = Genarray.kind
+  let layout = Genarray.layout
+  let size_in_bytes = Genarray.size_in_bytes
+  let get t i j k = read t (index3 t i j k)
+  let set t i j k value = write t (index3 t i j k) value
+  let unsafe_get t i j k = read t (unsafe_index3 t i j k)
+  let unsafe_set t i j k value = write t (unsafe_index3 t i j k) value
+  let fill = fill
+  let blit = blit
+  let sub_left = sub
+  let sub_right = sub
+  let slice_left_1 t i j = slice t [| i; j |]
+  let slice_right_1 t j k = slice t [| j; k |]
+  let slice_left_2 t i = slice t [| i |]
+  let slice_right_2 t k = slice t [| k |]
+  let change_layout = change_layout
+
+  let init k l n m o f =
+    Genarray.init k l [| n; m; o |] (fun indices ->
+        f indices.(0) indices.(1) indices.(2))
+
+  let of_array k l values =
+    let n = Array.length values in
+    let m = if n = 0 then 0 else Array.length values.(0) in
+    let o = if m = 0 then 0 else Array.length values.(0).(0) in
+    Array.iter
+      (fun row ->
+        if Array.length row <> m then
+          invalid_arg "Bigarray.Array3.of_array: ragged";
+        Array.iter
+          (fun col ->
+            if Array.length col <> o then
+              invalid_arg "Bigarray.Array3.of_array: ragged")
+          row)
+      values;
+    let b = base l in
+    init k l n m o (fun i j k -> values.(i - b).(j - b).(k - b))
 end
+
+let genarray_of_array0 t = t
+let genarray_of_array1 t = t
+let genarray_of_array2 t = t
+let genarray_of_array3 t = t
+
+let rank n t =
+  if Array.length t.dims <> n then invalid_arg "Bigarray: rank conversion";
+  t
+
+let array0_of_genarray t = rank 0 t
+let array1_of_genarray t = rank 1 t
+let array2_of_genarray t = rank 2 t
+let array3_of_genarray t = rank 3 t
+let reshape_0 t = reshape t [||]
+let reshape_1 t n = reshape t [| n |]
+let reshape_2 t n m = reshape t [| n; m |]
+let reshape_3 t n m o = reshape t [| n; m; o |]

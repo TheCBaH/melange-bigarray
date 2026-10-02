@@ -4,29 +4,17 @@ import pathlib
 import shutil
 import subprocess
 import sys
-import resource
-import hashlib
-import platform
 
 root = pathlib.Path(__file__).resolve().parents[1]
 version = subprocess.check_output(['ocamlc', '-version'], text=True).strip()
 work = root / '.cache/traces' / version
-reports = pathlib.Path(os.environ.get('REPORT_DIR', str(root / '.cache/reports' / version)))
+reports = root / '.cache/reports' / version
 reports.mkdir(parents=True, exist_ok=True)
 half = version.startswith('5.')
 count = int(os.environ.get('TRACE_COUNT', '1000'))
 if not 1000 <= count <= 100000:
     raise RuntimeError('trace count must be between 1000 and 100000')
 mode = sys.argv[1]
-replay = json.loads(pathlib.Path(os.environ['TRACE_REPLAY']).read_text()) if os.environ.get('TRACE_REPLAY') else None
-if replay:
-    assert isinstance(replay['id'],int) and 0 <= replay['id'] < 100000
-    for domain, limits in [('vector',[15]),('matrix',[3,4])]:
-        for i, n in enumerate(replay.get('shape',{}).get(domain,[])):
-            assert (1 if domain == 'vector' else 0) <= n <= limits[i]
-
-def limit_memory():
-    resource.setrlimit(resource.RLIMIT_AS, (1024**3, 1024**3))
 
 def command(args, **kwargs):
     subprocess.run(args, check=True, timeout=600, **kwargs)
@@ -35,8 +23,7 @@ def run_report(name, args):
     out = reports / (name + '.tsv')
     err = reports / (name + '.stderr')
     with out.open('w') as stdout, err.open('w') as stderr:
-        subprocess.run(args, stdout=stdout, stderr=stderr, check=True, timeout=120,
-                       preexec_fn=limit_memory if name == 'native' else None)
+        subprocess.run(args, stdout=stdout, stderr=stderr, check=True, timeout=120)
     if out.stat().st_size > 16 * 1024 * 1024:
         raise RuntimeError('trace payload exceeds 16 MiB')
     return out
@@ -63,43 +50,16 @@ if mode == 'build':
      65520.; -65520.; 0.00006103515625; 0.000000059604644775390625;
      0.0000000298023223876953125; 1.00048828125; 1.00146484375];
 '''
-    source = source.replace('(* FLOAT16_TESTS *)', 'if not Backend.replaying then ('+tests+');' if half else '')
+    source = source.replace('(* FLOAT16_TESTS *)', tests if half else '')
     for backend in ['native', 'jsoo', 'melange']:
         path = work / backend
         path.mkdir()
         (path / 'trace.ml').write_text(source)
         (path / 'multidimensional.ml').write_text((root / 'test/multidimensional.ml.in').read_text())
-        (path / 'ops.ml').write_text((root / 'test/ops.ml.in').read_text())
         (path / 'dune-project').write_text('(lang dune 3.21)\n(using melange 1.0)\n')
         header = 'module Bigarray = ' + ('Melange_bigarray' if backend == 'melange' else 'Bigarray') + '\n'
         header += 'module Nativeint = ' + ('Melange_bigarray.Nativeint' if backend == 'melange' else 'Nativeint') + '\n'
         header += 'let trace_count = ' + str(count) + '\n'
-        header += 'let replaying = ' + ('true' if replay else 'false') + '\n'
-        header += 'let trace_ids = ' + ('['+str(replay['id'])+']' if replay else 'List.init trace_count Fun.id') + '\n'
-        skipped = replay.get('skip',{}) if replay else {}
-        header += 'let perform domain step f =\n match domain with\n'
-        if backend == 'melange' and os.environ.get('TRACE_TEST_FAULT') == 'drop-vector-17':
-            header = header.replace('let perform domain step f =\n match domain with',
-              'let perform domain step f =\n if domain = "vector" && step = 17 then () else match domain with')
-        for domain in ['vector','matrix']:
-            skips = ';'.join(str(int(n)) for n in skipped.get(domain,[]))
-            header += ' | "'+domain+'" -> if not (List.mem step ['+skips+']) then f ()\n'
-        header += ' | _ -> f ()\nlet shape domain axis original = match domain, axis with\n'
-        for domain, dims in (replay.get('shape',{}) if replay else {}).items():
-            for i,n in enumerate(dims):
-                header += ' | "'+domain+'", '+str(i)+' -> '+str(n)+'\n'
-        header += ' | _ -> original\n'
-        if backend == 'melange':
-            header += 'module Ops = Melange_bigarray.Ops\n'
-        else:
-            header += """module Ops = struct
- type packed = P : ('a,'b,'c) Bigarray.Genarray.t -> packed
- let compare a b = Stdlib.compare (P a) (P b)
- let equal a b = P a = P b
- let hash a = Hashtbl.hash (P a)
- let seeded_hash seed a = Hashtbl.seeded_hash seed (P a)
-end
-"""
         if half:
             ty = '(float, Bigarray.float16_elt, Bigarray.c_layout) Bigarray.Array1.t'
             if backend == 'melange':
@@ -144,7 +104,7 @@ let boundaries () =
             header += 'let boundaries () = ()\n'
         (path / 'backend.ml').write_text(header)
         if backend == 'native':
-            dune = '(executable (name trace) (modules trace backend multidimensional ops) (modes exe)'
+            dune = '(executable (name trace) (modules trace backend multidimensional) (modes exe)'
             if half:
                 dune += ' (foreign_stubs (language c) (names half_poke))'
                 (path / 'half_poke.c').write_text('''#include <stdint.h>
@@ -157,50 +117,34 @@ CAMLprim value oracle_half_poke(value a, value bits) {
 ''')
             dune += ')\n'
         elif backend == 'jsoo':
-            dune = '(executable (name trace) (modules trace backend multidimensional ops) (modes js) (js_of_ocaml (javascript_files oracle.js)))\n'
+            dune = '(executable (name trace) (modules trace backend multidimensional) (modes js) (js_of_ocaml (javascript_files oracle.js)))\n'
             (path / 'oracle.js').write_text('//Provides: oracle_half_poke\nfunction oracle_half_poke(a, bits) { a.data[0] = bits; return 0; }\n')
         else:
-            dune = '(melange.emit (target output) (modules trace backend multidimensional ops) (libraries melange-bigarray) (preprocess (pps melange.ppx)))\n'
+            dune = '(melange.emit (target output) (modules trace backend multidimensional) (libraries melange-bigarray) (preprocess (pps melange.ppx)))\n'
         (path / 'dune').write_text(dune)
         env = dict(os.environ, OCAMLPATH=str(prefix / 'lib'))
         command(['dune', 'build', '--root', str(path), '@all'], env=env)
-    (work / 'configuration.json').write_text(json.dumps({'count': count, 'ocaml': version, 'half': half,'replay':replay})+'\n')
+    (work / 'configuration.json').write_text(json.dumps({'count': count, 'ocaml': version, 'half': half})+'\n')
 elif mode == 'node':
     run_report('native', [str(work / 'native/_build/default/trace.exe')])
     run_report('jsoo-node', ['node', '--max-old-space-size=256', str(work / 'jsoo/_build/default/trace.bc.js')])
     run_report('melange-node', ['node', '--max-old-space-size=256', str(work / 'melange/_build/default/output/trace.js')])
 elif mode == 'compare':
-    engine=os.environ.get('BROWSER_ENGINE','chromium')
-    files = ['native', 'jsoo-node', 'melange-node', 'jsoo-'+engine, 'melange-'+engine]
+    files = ['native', 'jsoo-node', 'melange-node', 'jsoo-chromium', 'melange-chromium']
     reference = (reports / 'native.tsv').read_text().splitlines()
     for backend in files[1:]:
         actual = (reports / (backend + '.tsv')).read_text().splitlines()
         if actual != reference:
             for i, (a,b) in enumerate(zip(reference,actual)):
                 if a != b:
-                    label=a.split('\t')[0]
-                    failure={'backend': backend, 'line': i, 'native': a, 'actual': b, 'seed': '13579bdf', 'count': count}
-                    if label.startswith(('trace/','trace-matrix/','input/')):
-                        failure['id']=int(label.split('/')[1])
-                        failure['draws']=next((s.split('\t',1)[1] for s in reference if s.startswith('input/'+str(failure['id'])+'\t')),None)
-                    (reports / 'failure.json').write_text(json.dumps(failure,indent=2)+'\n')
-                    if 'id' in failure and not replay:
-                        subprocess.run([sys.executable,str(root/'tools/shrink.py'),str(reports/'failure.json')],check=True,timeout=600)
+                    (reports / 'failure.json').write_text(json.dumps({'backend': backend, 'line': i, 'native': a, 'actual': b, 'seed': '13579bdf', 'count': count},indent=2)+'\n')
                     raise RuntimeError(f'{backend}: first mismatch at {i}: {a!r} != {b!r}')
             raise RuntimeError(backend + ': report length mismatch')
     report = json.loads((work / 'configuration.json').read_text())
     report.update({'source': subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
                    'dirty': bool(subprocess.check_output(['git','status','--porcelain'], text=True)),
                    'runtimes': files, 'seed': '13579bdf', 'observations': len(reference), 'byte_limit': '0x3fffffff'})
-    report.update({'arch':platform.machine(),'node':subprocess.check_output(['node','--version'],text=True).strip(),
-      'api_entries':json.loads((root/'.cache/reports'/version/'api-coverage.json').read_text()),
-      'locks_sha256':{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [root/'tools/oracles.lock.json',root/'tools/toolchain.lock.json',root/('tools/opam-'+version+'.lock'),root/'package-lock.json',root/'.devcontainer/devcontainer-lock.json']},
-      'limits':{'native_address_space_bytes':1024**3,'node_heap_mib':256,'browser_heap_mib':256 if engine=='chromium' else None,'subprocess_seconds':120,'payload_bytes':16*1024**2},
-      'differences':'docs/differences.md','generated_vector_traces':1 if replay else count,'generated_matrix_traces':1 if replay else count})
     (reports / 'differential.json').write_text(json.dumps(report, indent=2)+'\n')
-    (reports / 'inputs.json').write_text(json.dumps({
-      'seed':'13579bdf','per_trace_seed':'0x13579bdf + id * 104729 (Int32)',
-      'configuration':report,'draws':{s.split('\t')[0].split('/')[1]:s.split('\t')[1] for s in reference if s.startswith('input/')}},indent=2)+'\n')
     print(json.dumps(report, indent=2))
 else:
     raise RuntimeError('unknown trace action')

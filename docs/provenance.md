@@ -15,3 +15,10 @@ source is inspected to characterize rejected primitives, not imported.
 The GitHub repository and opam package directory were absent at lookup on
 2026-10-02. The new GitHub repository now reserves the repository name;
 opam submission remains a separate action.
+
+The installed interface is generated from the selected inventory by replacing
+native primitives with ordinary function declarations. It retains OCaml's
+license; the package declares both MIT and the OCaml linking-exception license
+and installs the upstream license/notice alongside the implementation license.
+Float16 encode/decode uses newly written arithmetic with float32 narrowing,
+not a copy of the OCaml/jsoo conversion algorithm.

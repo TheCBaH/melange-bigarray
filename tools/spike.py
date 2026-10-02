@@ -5,15 +5,16 @@ import shutil
 import subprocess
 
 root = pathlib.Path.cwd()
-reports = root / ".cache/reports"
+version = subprocess.check_output(['ocamlc', '-version'], text=True).strip()
+reports = root / '.cache/reports' / version
 reports.mkdir(parents=True, exist_ok=True)
-work = root / ".cache/spike"
+work = root / ".cache/spike" / version
 if work.exists():
     shutil.rmtree(work)
 work.mkdir(parents=True)
 prefix = work / "installed"
-subprocess.run(["dune", "build", "@install"], check=True)
-subprocess.run(["dune", "install", "--prefix", str(prefix)], check=True)
+subprocess.run(["dune", "build", "--build-dir", os.environ.get("BUILD_DIR", "_build-"+version), "@install"], check=True)
+subprocess.run(["dune", "install", "--build-dir", os.environ.get("BUILD_DIR", "_build-"+version), "--prefix", str(prefix)], check=True)
 env = dict(os.environ, OCAMLPATH=str(prefix / "lib"))
 results = []
 

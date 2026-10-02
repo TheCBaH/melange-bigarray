@@ -1,0 +1,166 @@
+[
+  {
+    "version": "4.14.4",
+    "path": "stdlib/bigarray.mli",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/2257629c205d0e1bc123cf048554979c74ae5410/stdlib/bigarray.mli",
+    "sha256": "32d3593e307e84d2b7f44351bd35060f915394615b6aa548b6e4da4e1a7b2f1f",
+    "revision": "2257629c205d0e1bc123cf048554979c74ae5410"
+  },
+  {
+    "version": "4.14.4",
+    "path": "stdlib/bigarray.ml",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/2257629c205d0e1bc123cf048554979c74ae5410/stdlib/bigarray.ml",
+    "sha256": "f50944b38c3250d460f2b5f945baf673998402bd420e80098da180937db8e63d",
+    "revision": "2257629c205d0e1bc123cf048554979c74ae5410"
+  },
+  {
+    "version": "4.14.4",
+    "path": "runtime/bigarray.c",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/2257629c205d0e1bc123cf048554979c74ae5410/runtime/bigarray.c",
+    "sha256": "4ccd72fded7869b1c98e4ccd66f082b0ba85f4c2abf87a8c9d6ab50e78ea9012",
+    "revision": "2257629c205d0e1bc123cf048554979c74ae5410"
+  },
+  {
+    "version": "4.14.4",
+    "path": "LICENSE",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/2257629c205d0e1bc123cf048554979c74ae5410/LICENSE",
+    "sha256": "65f47d3bf5a921011ac7fa30f23d54f9dffbe7683921eeb116d5ce8dc26ff0c1",
+    "revision": "2257629c205d0e1bc123cf048554979c74ae5410"
+  },
+  {
+    "version": "5.2.1",
+    "path": "stdlib/bigarray.mli",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/85d9a7ed3554a83af13fbf6d662cca3a0d494326/stdlib/bigarray.mli",
+    "sha256": "a861603194ddc360458b34eab4a92627a2279fac3a6b2ec2a945e116d71c7057",
+    "revision": "85d9a7ed3554a83af13fbf6d662cca3a0d494326"
+  },
+  {
+    "version": "5.2.1",
+    "path": "stdlib/bigarray.ml",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/85d9a7ed3554a83af13fbf6d662cca3a0d494326/stdlib/bigarray.ml",
+    "sha256": "6cf8c8bbe47c857796aa0e66ef97336a1ef7bfb6ebb7f5e4c2960fbdc0670fdd",
+    "revision": "85d9a7ed3554a83af13fbf6d662cca3a0d494326"
+  },
+  {
+    "version": "5.2.1",
+    "path": "runtime/bigarray.c",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/85d9a7ed3554a83af13fbf6d662cca3a0d494326/runtime/bigarray.c",
+    "sha256": "b6b122119ece6ae8be6ed660c45a756e2f73416a536d4510bc7c4b5bd69f9eaa",
+    "revision": "85d9a7ed3554a83af13fbf6d662cca3a0d494326"
+  },
+  {
+    "version": "5.2.1",
+    "path": "LICENSE",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/85d9a7ed3554a83af13fbf6d662cca3a0d494326/LICENSE",
+    "sha256": "65f47d3bf5a921011ac7fa30f23d54f9dffbe7683921eeb116d5ce8dc26ff0c1",
+    "revision": "85d9a7ed3554a83af13fbf6d662cca3a0d494326"
+  },
+  {
+    "version": "5.3.0",
+    "path": "stdlib/bigarray.mli",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/1ccb919e35f8378834060c503ae953897fe0fb7f/stdlib/bigarray.mli",
+    "sha256": "76c079ec0be1e0e9bca8ce849eaadb56ae2fceaccf71318388c7c5b837b47346",
+    "revision": "1ccb919e35f8378834060c503ae953897fe0fb7f"
+  },
+  {
+    "version": "5.3.0",
+    "path": "stdlib/bigarray.ml",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/1ccb919e35f8378834060c503ae953897fe0fb7f/stdlib/bigarray.ml",
+    "sha256": "6cf8c8bbe47c857796aa0e66ef97336a1ef7bfb6ebb7f5e4c2960fbdc0670fdd",
+    "revision": "1ccb919e35f8378834060c503ae953897fe0fb7f"
+  },
+  {
+    "version": "5.3.0",
+    "path": "runtime/bigarray.c",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/1ccb919e35f8378834060c503ae953897fe0fb7f/runtime/bigarray.c",
+    "sha256": "4a560e1b2dbd40be438ca95403152ef253810d3d16dde33c5f46365a5c4be254",
+    "revision": "1ccb919e35f8378834060c503ae953897fe0fb7f"
+  },
+  {
+    "version": "5.3.0",
+    "path": "LICENSE",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/1ccb919e35f8378834060c503ae953897fe0fb7f/LICENSE",
+    "sha256": "65f47d3bf5a921011ac7fa30f23d54f9dffbe7683921eeb116d5ce8dc26ff0c1",
+    "revision": "1ccb919e35f8378834060c503ae953897fe0fb7f"
+  },
+  {
+    "version": "5.4.1",
+    "path": "stdlib/bigarray.mli",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/152d7ca5dd2c67ecfece73f91aea5697f95178a5/stdlib/bigarray.mli",
+    "sha256": "76c079ec0be1e0e9bca8ce849eaadb56ae2fceaccf71318388c7c5b837b47346",
+    "revision": "152d7ca5dd2c67ecfece73f91aea5697f95178a5"
+  },
+  {
+    "version": "5.4.1",
+    "path": "stdlib/bigarray.ml",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/152d7ca5dd2c67ecfece73f91aea5697f95178a5/stdlib/bigarray.ml",
+    "sha256": "6cf8c8bbe47c857796aa0e66ef97336a1ef7bfb6ebb7f5e4c2960fbdc0670fdd",
+    "revision": "152d7ca5dd2c67ecfece73f91aea5697f95178a5"
+  },
+  {
+    "version": "5.4.1",
+    "path": "runtime/bigarray.c",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/152d7ca5dd2c67ecfece73f91aea5697f95178a5/runtime/bigarray.c",
+    "sha256": "762641ffaadae4f75d9e5f33e506333a5528dd7e100eb312dbdf9c838f87e273",
+    "revision": "152d7ca5dd2c67ecfece73f91aea5697f95178a5"
+  },
+  {
+    "version": "5.4.1",
+    "path": "LICENSE",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/152d7ca5dd2c67ecfece73f91aea5697f95178a5/LICENSE",
+    "sha256": "65f47d3bf5a921011ac7fa30f23d54f9dffbe7683921eeb116d5ce8dc26ff0c1",
+    "revision": "152d7ca5dd2c67ecfece73f91aea5697f95178a5"
+  },
+  {
+    "version": "5.5.1",
+    "path": "stdlib/bigarray.mli",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91/stdlib/bigarray.mli",
+    "sha256": "76c079ec0be1e0e9bca8ce849eaadb56ae2fceaccf71318388c7c5b837b47346",
+    "revision": "46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91"
+  },
+  {
+    "version": "5.5.1",
+    "path": "stdlib/bigarray.ml",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91/stdlib/bigarray.ml",
+    "sha256": "6cf8c8bbe47c857796aa0e66ef97336a1ef7bfb6ebb7f5e4c2960fbdc0670fdd",
+    "revision": "46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91"
+  },
+  {
+    "version": "5.5.1",
+    "path": "runtime/bigarray.c",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91/runtime/bigarray.c",
+    "sha256": "a58d499a048b6f9c52224cc4ea476547f5bda2821e0dbbadc52040f4afe5ff26",
+    "revision": "46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91"
+  },
+  {
+    "version": "5.5.1",
+    "path": "LICENSE",
+    "url": "https://raw.githubusercontent.com/ocaml/ocaml/46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91/LICENSE",
+    "sha256": "65f47d3bf5a921011ac7fa30f23d54f9dffbe7683921eeb116d5ce8dc26ff0c1",
+    "revision": "46e1c324fb9e9f21f52c9cc3399020f7ef8b9b91"
+  },
+  {
+    "version": "6.4.1",
+    "path": "runtime/js/bigarray.js",
+    "url": "https://raw.githubusercontent.com/ocsigen/js_of_ocaml/02ac3ba6a21f6f58b0a4c69b799ac6f43023d674/runtime/js/bigarray.js",
+    "revision": "02ac3ba6a21f6f58b0a4c69b799ac6f43023d674",
+    "sha256": "eff550994ca84417234101aef6142eef5a3906b9f1d200075c2f060189252b23",
+    "repo": "ocsigen/js_of_ocaml"
+  },
+  {
+    "version": "6.4.1",
+    "path": "LICENSE",
+    "url": "https://raw.githubusercontent.com/ocsigen/js_of_ocaml/02ac3ba6a21f6f58b0a4c69b799ac6f43023d674/LICENSE",
+    "revision": "02ac3ba6a21f6f58b0a4c69b799ac6f43023d674",
+    "sha256": "ade61810946164eda728c580946f52b70e709f3f5dbcba68534b2f41a8104cb6",
+    "repo": "ocsigen/js_of_ocaml"
+  },
+  {
+    "version": "7.0.1-55",
+    "path": "jscomp/core/lam_convert.cppo.ml",
+    "url": "https://raw.githubusercontent.com/melange-re/melange/08cd3ca8fcc9ec2a75ebacb5f86f336467cd2e6c/jscomp/core/lam_convert.cppo.ml",
+    "revision": "08cd3ca8fcc9ec2a75ebacb5f86f336467cd2e6c",
+    "sha256": "9f293b7981775189b283663e5cccf900d404631a452dca69a8d95e2cba1a880c",
+    "repo": "melange-re/melange"
+  }
+]

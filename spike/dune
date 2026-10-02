@@ -1,0 +1,4 @@
+(melange.emit
+ (target output)
+ (modules probe separate)
+ (libraries melange-bigarray melange-bigarray.compat))

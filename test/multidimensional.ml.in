@@ -1,0 +1,188 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+module B = Backend.Bigarray
+let emit key value = print_endline (key ^ "\t" ^ value)
+let invalid key f = try f (); failwith (key ^ ": expected Invalid_argument") with Invalid_argument message -> emit key "Invalid_argument"; prerr_endline (key ^ ": " ^ message)
+let dimensions t = String.concat "," (List.map string_of_int (Array.to_list (B.Genarray.dims t)))
+
+let exercise : type a b c. string -> (a,b) B.kind -> c B.layout -> (int -> a) -> (a -> string) -> unit =
+ fun name kind layout value encode ->
+  let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
+  let key = "multi/" ^ name ^ "/" ^ string_of_int base ^ "/" in
+  let order2 = ref [] in
+  let a2 = B.Array2.init kind layout 2 3 (fun i j -> order2 := (string_of_int i ^ "," ^ string_of_int j) :: !order2; value (100*i+j)) in
+  emit (key ^ "init2-order") (String.concat ";" (List.rev !order2));
+  assert (B.Array2.dim1 a2 = 2 && B.Array2.dim2 a2 = 3);
+  assert (B.Array2.kind a2 = kind && B.Array2.layout a2 = layout);
+  assert (B.Array2.size_in_bytes a2 = 6 * B.kind_size_in_bytes kind);
+  let observe2 label t =
+    emit (key ^ label) (String.concat ";" (List.init (B.Array2.dim1 t * B.Array2.dim2 t) (fun p ->
+      encode (B.Array2.get t (base + p / B.Array2.dim2 t) (base + p mod B.Array2.dim2 t)))))
+  in
+  B.Array2.unsafe_set a2 base (base+1) (value 19);
+  emit (key ^ "unsafe2") (encode (B.Array2.unsafe_get a2 base (base+1)));
+  (match layout with
+  | B.C_layout ->
+      B.Array1.fill (B.Array2.slice_left a2 (base+1)) (value 21);
+      B.Array2.fill (B.Array2.sub_left a2 base 1) (value 23)
+  | B.Fortran_layout ->
+      B.Array1.fill (B.Array2.slice_right a2 (base+1)) (value 21);
+      B.Array2.fill (B.Array2.sub_right a2 base 1) (value 23));
+  observe2 "views2" a2;
+  let nested2 = B.Array2.of_array kind layout [|[|value 1;value 2;value 3|];[|value 4;value 5;value 6|]|] in
+  observe2 "nested2" nested2;
+  B.Array2.blit nested2 a2;
+  observe2 "blit2" a2;
+  B.Array2.set (B.array2_of_genarray (B.genarray_of_array2 a2)) base base (value 17);
+  B.Genarray.blit (B.genarray_of_array2 a2) (B.genarray_of_array2 nested2);
+  invalid (key ^ "ragged2") (fun () -> ignore (B.Array2.of_array kind layout [|[|value 1|];[||]|]));
+  invalid (key ^ "bounds2") (fun () -> ignore (B.Array2.get a2 (base+2) base));
+  invalid (key ^ "blit2-shape") (fun () -> B.Array2.blit a2 (B.Array2.create kind layout 3 2));
+  let order3 = ref [] in
+  let a3 = B.Array3.init kind layout 2 3 4 (fun i j k ->
+    order3 := (string_of_int i ^ "," ^ string_of_int j ^ "," ^ string_of_int k) :: !order3;
+    value (100*i+10*j+k)) in
+  emit (key ^ "init3-order") (String.concat ";" (List.rev !order3));
+  assert (B.Array3.dim1 a3 = 2 && B.Array3.dim2 a3 = 3 && B.Array3.dim3 a3 = 4);
+  assert (B.Array3.kind a3 = kind && B.Array3.layout a3 = layout);
+  assert (B.Array3.size_in_bytes a3 = 24 * B.kind_size_in_bytes kind);
+  let observe3 label =
+    emit (key ^ label) (String.concat ";" (List.init 24 (fun p -> encode (B.Array3.get a3 (base + p/12) (base + p/4 mod 3) (base + p mod 4)))))
+  in
+  B.Array3.unsafe_set a3 base base base (value 25);
+  emit (key ^ "unsafe3") (encode (B.Array3.unsafe_get a3 base base base));
+  (match layout with
+  | B.C_layout ->
+      B.Array1.fill (B.Array3.slice_left_1 a3 (base+1) (base+1)) (value 27);
+      let two = B.Array3.slice_left_2 a3 base in
+      B.Array2.fill (B.Array2.sub_left two (base+1) 1) (value 29);
+      let sub = B.Array3.sub_left a3 base 1 in
+      B.Array3.fill (B.Array3.sub_left sub base 1) (value 31)
+  | B.Fortran_layout ->
+      B.Array1.fill (B.Array3.slice_right_1 a3 (base+1) (base+1)) (value 27);
+      let two = B.Array3.slice_right_2 a3 base in
+      B.Array2.fill (B.Array2.sub_right two (base+1) 1) (value 29);
+      let sub = B.Array3.sub_right a3 base 1 in
+      B.Array3.fill (B.Array3.sub_right sub base 1) (value 31));
+  observe3 "chained-views3";
+  let g = B.genarray_of_array3 a3 in
+  assert (B.Genarray.kind g = kind && B.Genarray.layout g = layout);
+  (match layout with
+  | B.C_layout ->
+      B.Genarray.fill (B.Genarray.slice_left g [|base+1;base|]) (value 33);
+      B.Genarray.fill (B.Genarray.sub_left g (base+1) 1) (value 35)
+  | B.Fortran_layout ->
+      B.Genarray.fill (B.Genarray.slice_right g [|base+1;base|]) (value 33);
+      B.Genarray.fill (B.Genarray.sub_right g (base+1) 1) (value 35));
+  observe3 "generic-views3";
+  B.Array3.set (B.array3_of_genarray g) base base base (value 37);
+  let reshaped2 = B.reshape_2 g 4 6 in
+  B.Array2.set reshaped2 base base (value 39);
+  let reshaped3 = B.reshape_3 g 3 2 4 in
+  B.Array3.set reshaped3 base base base (value 41);
+  let flat = B.reshape_1 g 24 in
+  B.Array1.set flat (base+3) (value 43);
+  observe3 "reshape-sharing";
+  let changed3 = B.Array3.change_layout a3 B.fortran_layout in
+  emit (key ^ "changed3-dims") (dimensions (B.genarray_of_array3 changed3));
+  B.Array3.set changed3 1 1 1 (value 45);
+  observe3 "changed3-sharing";
+  let changed2 = B.Array2.change_layout a2 B.c_layout in
+  emit (key ^ "changed2-dims") (dimensions (B.genarray_of_array2 changed2));
+  B.Array2.set changed2 0 0 (value 47);
+  observe2 "changed2-sharing" a2;
+  let changed_g = B.Genarray.change_layout g B.c_layout in
+  let dims = B.Genarray.dims changed_g in
+  if Array.length dims > 0 then dims.(0) <- 99;
+  B.Genarray.set changed_g (Array.make 3 0) (value 49);
+  observe3 "changed-generic";
+  let peer3 = B.Array3.create kind layout 2 3 4 in
+  B.Array3.blit a3 peer3;
+  emit (key ^ "blit3") (encode (B.Array3.get peer3 base base base));
+  let nested3 = B.Array3.of_array kind layout [|[|[|value 1;value 2|];[|value 3;value 4|]|]|] in
+  emit (key ^ "nested3") (encode (B.Array3.get nested3 base (base+1) (base+1)));
+  invalid (key ^ "ragged3") (fun () -> ignore (B.Array3.of_array kind layout [|[|[|value 1|]|];[|[||]|]|]));
+  invalid (key ^ "ragged3-rows") (fun () -> ignore (B.Array3.of_array kind layout [|[|[|value 1|]|];[||]|]));
+  invalid (key ^ "bounds3") (fun () -> B.Array3.set a3 base (base+3) base (value 0));
+  invalid (key ^ "reshape-size") (fun () -> ignore (B.reshape g [|23|]));
+  invalid (key ^ "rank3-conversion") (fun () -> ignore (B.array3_of_genarray (B.genarray_of_array2 a2)));
+  invalid (key ^ "rank2-conversion") (fun () -> ignore (B.array2_of_genarray g));
+  for rank = 0 to 16 do
+    let dimensions = Array.make rank 1 in
+    let t = B.Genarray.init kind layout dimensions (fun _ -> value 51) in
+    dimensions |> Array.iteri (fun i _ -> dimensions.(i) <- 2);
+    assert (B.Genarray.dims t = Array.make rank 1);
+    B.Genarray.set t (Array.make rank base) (value 53);
+    emit (key ^ "rank/" ^ string_of_int rank) (encode (B.Genarray.get t (Array.make rank base)));
+    if rank > 0 then (
+      let zeros = Array.make rank 1 in
+      zeros.(rank/2) <- 0;
+      let empty = B.Genarray.create kind layout zeros in
+      B.Genarray.fill empty (value 0);
+      B.Genarray.blit empty empty;
+      assert (B.Genarray.size_in_bytes empty = 0);
+      invalid (key ^ "empty-slice/" ^ string_of_int rank) (fun () -> match layout with
+        B.C_layout -> ignore (B.Genarray.slice_left empty [||])
+        | B.Fortran_layout -> ignore (B.Genarray.slice_right empty [||])))
+  done;
+  for n = 0 to 3 do
+    for m = 0 to 3 do
+      let a = B.Array2.init kind layout n m (fun i j -> value (10*i+j)) in
+      for i = 0 to n-1 do
+        for j = 0 to m-1 do
+          emit (key ^ "small/" ^ string_of_int n ^ "," ^ string_of_int m ^ "/" ^ string_of_int i ^ "," ^ string_of_int j)
+            (encode (B.Array2.get a (base+i) (base+j)))
+        done
+      done
+    done
+  done
+
+let property : type a b c. int -> (int -> int) -> (a,b) B.kind -> c B.layout -> (int -> a) -> (a -> string) -> unit =
+ fun id random kind layout value encode ->
+  let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
+  let n = Backend.shape "matrix" 0 (random 4) in
+  let m = Backend.shape "matrix" 1 (random 5) in
+  let a = B.Array2.init kind layout n m (fun i j -> value (10*i+j)) in
+  let g = B.genarray_of_array2 a in
+  let operations = 8 + random 16 in
+  for step = 1 to operations do
+    if n = 0 || m = 0 then (
+      Backend.perform "matrix" step (fun () ->
+        B.Genarray.fill (B.reshape g [|0|]) (value 0); B.Genarray.blit g g))
+    else
+      match random 5 with
+      | 0 ->
+          let i = base + random n in
+          let j = base + random m in
+          let next = value (random 65535 - 32768) in
+          Backend.perform "matrix" step (fun () -> B.Array2.set a i j next)
+      | 1 ->
+          let dimension = match layout with B.C_layout -> n | B.Fortran_layout -> m in
+          let size = random (dimension+1) in
+          let start = base + random (dimension-size+1) in
+          let next = value (random 65535 - 32768) in
+          Backend.perform "matrix" step (fun () -> match layout with
+           | B.C_layout -> B.Array2.fill (B.Array2.sub_left a start size) next
+           | B.Fortran_layout -> B.Array2.fill (B.Array2.sub_right a start size) next)
+      | 2 ->
+          let dimension = match layout with B.C_layout -> n | B.Fortran_layout -> m in
+          let coordinate = base + random dimension in
+          let next = value (random 65535 - 32768) in
+          Backend.perform "matrix" step (fun () -> match layout with
+           | B.C_layout -> B.Array1.fill (B.Array2.slice_left a coordinate) next
+           | B.Fortran_layout -> B.Array1.fill (B.Array2.slice_right a coordinate) next)
+      | 3 ->
+          let index = base + random (n*m) in
+          let next = value (random 65535 - 32768) in
+          Backend.perform "matrix" step (fun () -> B.Array1.set (B.reshape_1 g (n*m)) index next)
+      | _ ->
+          let next = value (random 65535 - 32768) in
+          Backend.perform "matrix" step (fun () ->
+            let changed = B.Genarray.change_layout g B.c_layout in
+            B.Genarray.set changed [|0;0|] next)
+  done;
+  let peer = B.Array2.create kind layout n m in
+  B.Array2.blit a peer;
+  emit ("trace-matrix/" ^ string_of_int id)
+    (String.concat ";" (List.init (n*m) (fun p -> encode (B.Array2.get peer (base+p/m) (base+p mod m)))))

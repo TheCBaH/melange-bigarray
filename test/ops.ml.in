@@ -1,0 +1,61 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+module B = Backend.Bigarray
+module O = Backend.Ops
+let emit key value = print_endline (key ^ "\t" ^ value)
+let sign n = if n < 0 then -1 else if n > 0 then 1 else 0
+
+let exercise : type a b c. string -> (a,b) B.kind -> c B.layout -> (int -> a) -> unit =
+ fun name kind layout value ->
+  let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
+  let key = "ops/" ^ name ^ "/" ^ string_of_int base ^ "/" in
+  let a = B.Array1.init kind layout 8 (fun i -> value (i-base)) in
+  let view = B.Array1.sub a (base+2) 3 in
+  let copy = B.Array1.init kind layout 3 (fun i -> B.Array1.get view i) in
+  let x = B.genarray_of_array1 view in
+  let y = B.genarray_of_array1 copy in
+  assert (O.equal x y && O.compare x y = 0);
+  assert (O.hash x = O.hash y);
+  List.iter (fun seed -> assert (O.seeded_hash seed x = O.seeded_hash seed y)) [0;1;0x13579bdf;-1];
+  emit (key ^ "views") (string_of_bool (O.equal x y));
+  B.Array1.set copy base (value 61);
+  emit (key ^ "content-order") (string_of_int (sign (O.compare x y)));
+  let reshaped = B.reshape x [|1;3|] in
+  emit (key ^ "rank-order") (string_of_int (sign (O.compare x reshaped)));
+  let changed = B.Genarray.change_layout x B.fortran_layout in
+  emit (key ^ "layout-order") (string_of_int (sign (O.compare x changed)))
+
+module Key = struct
+  type t = (float,B.float64_elt,B.c_layout) B.Genarray.t
+  let equal = O.equal
+  let hash = O.hash
+end
+module Table = Hashtbl.Make(Key)
+
+let special () =
+  let scalar kind value = B.genarray_of_array1 (B.Array1.of_array kind B.c_layout [|value|]) in
+  let zero = scalar B.float64 0. in
+  let negzero = scalar B.float64 (-0.) in
+  assert (O.equal zero negzero && O.compare zero negzero = 0 && O.hash zero = O.hash negzero);
+  emit "ops/signed-zero" "equal";
+  let a = scalar B.float64 nan in
+  let b = scalar B.float64 nan in
+  emit "ops/nan-self" (string_of_bool (O.equal a a));
+  emit "ops/nan-copy" (string_of_bool (O.equal a b));
+  emit "ops/nan-order" (string_of_int (sign (O.compare a zero)));
+  assert (O.compare a b = 0 && O.hash a = O.hash b);
+  let c = scalar B.complex64 {Complex.re=1.;im=nan} in
+  let d = scalar B.complex64 {Complex.re=1.;im=nan} in
+  emit "ops/complex-nan" (string_of_bool (O.equal c d));
+  assert (O.compare c d = 0 && O.hash c = O.hash d);
+  emit "ops/kind-order" (string_of_int (sign (O.compare (scalar B.float32 1.) (scalar B.float64 1.))));
+  let table = Table.create 7 in
+  Table.add table zero "zero";
+  assert (Table.find table negzero = "zero");
+  let source = B.Array1.of_array B.float64 B.c_layout [|9.;2.;3.;8.|] in
+  let view = B.genarray_of_array1 (B.Array1.sub source 1 2) in
+  let copy = B.genarray_of_array1 (B.Array1.of_array B.float64 B.c_layout [|2.;3.|]) in
+  Table.add table view "view";
+  assert (Table.find table copy = "view");
+  emit "ops/custom-hashtbl" "passed"

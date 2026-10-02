@@ -1,0 +1,33 @@
+{
+  "name": "melange-bigarray",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "username": "vscode",
+      "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/sshd:1": {},
+    "ghcr.io/thecbah/ocaml-features/ocaml:1": {
+      "version": "${localEnv:OCAML_VERSION:4.14.4}",
+      "packages": "dune#3.24.2 melange#${localEnv:MELANGE_VERSION:7.0.1-414} js_of_ocaml#6.4.1 js_of_ocaml-compiler#6.4.1 ocamlformat#0.29.0",
+      "base-packages": "",
+      "ocaml-version-overrides": "astring#0.8.5@4.14.4 base#v0.16.5@4.14.4 camlp-streams#5.0.1@4.14.4 cmdliner#2.1.1@4.14.4 cppo#1.8.0@4.14.4 csexp#1.5.2@4.14.4 dune#3.24.2@4.14.4 dune-build-info#3.24.2@4.14.4 dune-configurator#3.24.2@4.14.4 either#1.0.0@4.14.4 fix#20250919@4.14.4 fpath#0.7.3@4.14.4 gen#1.1@4.14.4 js_of_ocaml#6.4.1@4.14.4 js_of_ocaml-compiler#6.4.1@4.14.4 melange#7.0.1-414@4.14.4 menhir#20260209@4.14.4 menhirCST#20260209@4.14.4 menhirGLR#20260209@4.14.4 menhirLib#20260209@4.14.4 menhirSdk#20260209@4.14.4 ocaml-compiler-libs#v0.12.4@4.14.4 ocaml-version#4.1.4@4.14.4 ocamlbuild#0.16.1@4.14.4 ocamlfind#1.9.8@4.14.4 ocamlformat#0.29.0@4.14.4 ocamlformat-lib#0.29.0@4.14.4 ocp-indent#1.10.0@4.14.4 ppx_derivers#1.2.1@4.14.4 ppxlib#0.38.0@4.14.4 re#1.14.0@4.14.4 sedlex#3.7@4.14.4 sexplib0#v0.16.0@4.14.4 stdio#v0.16.0@4.14.4 stdlib-shims#0.3.0@4.14.4 topkg#1.1.1@4.14.4 uucp#18.0.0@4.14.4 uuseg#18.0.0@4.14.4 uutf#1.0.4@4.14.4 yojson#3.0.0@4.14.4 astring#0.8.5@5.2.1 base#v0.17.3@5.2.1 camlp-streams#5.0.1@5.2.1 cmdliner#2.1.1@5.2.1 cppo#1.8.0@5.2.1 csexp#1.5.2@5.2.1 dune#3.24.2@5.2.1 dune-build-info#3.24.2@5.2.1 dune-configurator#3.24.2@5.2.1 either#1.0.0@5.2.1 fix#20250919@5.2.1 fpath#0.7.3@5.2.1 gen#1.1@5.2.1 js_of_ocaml#6.4.1@5.2.1 js_of_ocaml-compiler#6.4.1@5.2.1 melange#7.0.1-52@5.2.1 menhir#20260209@5.2.1 menhirCST#20260209@5.2.1 menhirGLR#20260209@5.2.1 menhirLib#20260209@5.2.1 menhirSdk#20260209@5.2.1 ocaml-compiler-libs#v0.17.0@5.2.1 ocaml-version#4.1.4@5.2.1 ocaml_intrinsics_kernel#v0.17.2@5.2.1 ocamlbuild#0.16.1@5.2.1 ocamlfind#1.9.8@5.2.1 ocamlformat#0.29.0@5.2.1 ocamlformat-lib#0.29.0@5.2.1 ocp-indent#1.10.0@5.2.1 ppx_derivers#1.2.1@5.2.1 ppxlib#0.38.0@5.2.1 re#1.14.0@5.2.1 sedlex#3.7@5.2.1 sexplib0#v0.17.0@5.2.1 stdio#v0.17.0@5.2.1 stdlib-shims#0.3.0@5.2.1 topkg#1.1.1@5.2.1 uucp#18.0.0@5.2.1 uuseg#18.0.0@5.2.1 uutf#1.0.4@5.2.1 yojson#3.0.0@5.2.1 astring#0.8.5@5.3.0 base#v0.17.3@5.3.0 camlp-streams#5.0.1@5.3.0 cmdliner#2.1.1@5.3.0 cppo#1.8.0@5.3.0 csexp#1.5.2@5.3.0 dune#3.24.2@5.3.0 dune-build-info#3.24.2@5.3.0 dune-configurator#3.24.2@5.3.0 either#1.0.0@5.3.0 fix#20250919@5.3.0 fpath#0.7.3@5.3.0 gen#1.1@5.3.0 js_of_ocaml#6.4.1@5.3.0 js_of_ocaml-compiler#6.4.1@5.3.0 melange#7.0.1-53@5.3.0 menhir#20260209@5.3.0 menhirCST#20260209@5.3.0 menhirGLR#20260209@5.3.0 menhirLib#20260209@5.3.0 menhirSdk#20260209@5.3.0 ocaml-compiler-libs#v0.17.0@5.3.0 ocaml-version#4.1.4@5.3.0 ocaml_intrinsics_kernel#v0.17.2@5.3.0 ocamlbuild#0.16.1@5.3.0 ocamlfind#1.9.8@5.3.0 ocamlformat#0.29.0@5.3.0 ocamlformat-lib#0.29.0@5.3.0 ocp-indent#1.10.0@5.3.0 ppx_derivers#1.2.1@5.3.0 ppxlib#0.38.0@5.3.0 re#1.14.0@5.3.0 sedlex#3.7@5.3.0 sexplib0#v0.17.0@5.3.0 stdio#v0.17.0@5.3.0 stdlib-shims#0.3.0@5.3.0 topkg#1.1.1@5.3.0 uucp#18.0.0@5.3.0 uuseg#18.0.0@5.3.0 uutf#1.0.4@5.3.0 yojson#3.0.0@5.3.0 astring#0.8.5@5.4.1 base#v0.17.3@5.4.1 camlp-streams#5.0.1@5.4.1 cmdliner#2.1.1@5.4.1 cppo#1.8.0@5.4.1 csexp#1.5.2@5.4.1 dune#3.24.2@5.4.1 dune-build-info#3.24.2@5.4.1 dune-configurator#3.24.2@5.4.1 either#1.0.0@5.4.1 fix#20250919@5.4.1 fpath#0.7.3@5.4.1 gen#1.1@5.4.1 js_of_ocaml#6.4.1@5.4.1 js_of_ocaml-compiler#6.4.1@5.4.1 melange#7.0.1-54@5.4.1 menhir#20260209@5.4.1 menhirCST#20260209@5.4.1 menhirGLR#20260209@5.4.1 menhirLib#20260209@5.4.1 menhirSdk#20260209@5.4.1 ocaml-compiler-libs#v0.17.0@5.4.1 ocaml-version#4.1.4@5.4.1 ocaml_intrinsics_kernel#v0.17.2@5.4.1 ocamlbuild#0.16.1@5.4.1 ocamlfind#1.9.8@5.4.1 ocamlformat#0.29.0@5.4.1 ocamlformat-lib#0.29.0@5.4.1 ocp-indent#1.10.0@5.4.1 ppx_derivers#1.2.1@5.4.1 ppxlib#0.38.0@5.4.1 re#1.14.0@5.4.1 sedlex#3.7@5.4.1 sexplib0#v0.17.0@5.4.1 stdio#v0.17.0@5.4.1 stdlib-shims#0.3.0@5.4.1 topkg#1.1.1@5.4.1 uucp#18.0.0@5.4.1 uuseg#18.0.0@5.4.1 uutf#1.0.4@5.4.1 yojson#3.0.0@5.4.1 astring#0.8.5@5.5.1 base#v0.17.3@5.5.1 camlp-streams#5.0.1@5.5.1 cmdliner#2.1.1@5.5.1 cppo#1.8.0@5.5.1 csexp#1.5.2@5.5.1 dune#3.24.2@5.5.1 dune-build-info#3.24.2@5.5.1 dune-configurator#3.24.2@5.5.1 either#1.0.0@5.5.1 fix#20250919@5.5.1 fpath#0.7.3@5.5.1 gen#1.1@5.5.1 js_of_ocaml#6.4.1@5.5.1 js_of_ocaml-compiler#6.4.1@5.5.1 melange#7.0.1-55@5.5.1 menhir#20260209@5.5.1 menhirCST#20260209@5.5.1 menhirGLR#20260209@5.5.1 menhirLib#20260209@5.5.1 menhirSdk#20260209@5.5.1 ocaml-compiler-libs#v0.17.0@5.5.1 ocaml-version#4.1.4@5.5.1 ocaml_intrinsics_kernel#v0.17.2@5.5.1 ocamlbuild#0.16.1@5.5.1 ocamlfind#1.9.9~preview@5.5.1 ocamlformat#0.29.0@5.5.1 ocamlformat-lib#0.29.0@5.5.1 ocp-indent#1.10.0@5.5.1 ppx_derivers#1.2.1@5.5.1 ppxlib#0.38.0@5.5.1 re#1.14.0@5.5.1 sedlex#3.7@5.5.1 sexplib0#v0.17.0@5.5.1 stdio#v0.17.0@5.5.1 stdlib-shims#0.3.0@5.5.1 topkg#1.1.1@5.5.1 uucp#18.0.0@5.5.1 uuseg#18.0.0@5.5.1 uutf#1.0.4@5.5.1 yojson#3.0.0@5.5.1"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24.19.0"
+    }
+  },
+  "remoteUser": "vscode",
+  "runArgs": [
+    "--cap-add=SYS_ADMIN"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ocamllabs.ocaml-platform"
+      ]
+    }
+  }
+}

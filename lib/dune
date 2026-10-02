@@ -1,0 +1,10 @@
+(rule
+ (targets melange_bigarray.ml melange_bigarray.mli)
+ (deps melange_bigarray.ml.in melange_bigarray.mli.in ../tools/select_api.py)
+ (action
+  (run %{bin:python3} ../tools/select_api.py %{ocaml_version})))
+
+(library
+ (name melange_bigarray)
+ (public_name melange-bigarray)
+ (modes melange))

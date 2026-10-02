@@ -1,0 +1,6 @@
+(library
+ (name bigarray)
+ (public_name melange-bigarray.compat)
+ (wrapped false)
+ (modes melange)
+ (libraries melange_bigarray))

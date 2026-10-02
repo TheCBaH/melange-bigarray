@@ -1,0 +1,45 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.matrix.outputs.versions }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: matrix
+        run: echo "versions=$(jq -c . tools/matrix.json)" >> "$GITHUB_OUTPUT"
+  required:
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.versions) }}
+    env:
+      OCAML_VERSION: ${{ matrix.ocaml }}
+      MELANGE_VERSION: ${{ matrix.melange }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: TheCBaH/devcontainer-action/devcontainer@v1
+        id: container
+        with:
+          variant: ${{ matrix.ocaml }}
+          username: ${{ github.actor }}
+          password: ''
+      - name: Compatibility and standalone installation
+        run: ${{ steps.container.outputs.exec }} make ci
+      - name: Evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: compatibility-${{ matrix.ocaml }}
+          path: .cache/reports/
+          if-no-files-found: error

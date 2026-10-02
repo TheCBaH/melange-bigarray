@@ -1,0 +1,82 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+module Nativeint = struct
+  external of_int : int -> nativeint = "%nativeint_of_int"
+  external to_int : nativeint -> int = "%nativeint_to_int"
+  external add : nativeint -> nativeint -> nativeint = "%nativeint_add"
+end
+
+type float32_elt = Float32_elt
+type float64_elt = Float64_elt
+type int8_unsigned_elt = Int8_unsigned_elt
+type nativeint_elt = Nativeint_elt
+type complex64_elt = Complex64_elt
+
+type (_, _) kind =
+  | Float32 : (float, float32_elt) kind
+  | Float64 : (float, float64_elt) kind
+  | Char : (char, int8_unsigned_elt) kind
+  | Nativeint : (nativeint, nativeint_elt) kind
+  | Complex64 : (Complex.t, complex64_elt) kind
+
+type c_layout = C_layout_tag
+type fortran_layout = Fortran_layout_tag
+
+type _ layout =
+  | C_layout : c_layout layout
+  | Fortran_layout : fortran_layout layout
+
+let float64 = Float64
+let char = Char
+let nativeint = Nativeint
+let complex64 = Complex64
+let c_layout = C_layout
+let fortran_layout = Fortran_layout
+
+module Genarray = struct
+  type (!'a, !'b, !'c) t = {
+    kind : ('a, 'b) kind;
+    layout : 'c layout;
+    data : 'a array;
+  }
+
+  let create : type a b c. (a, b) kind -> c layout -> int array -> (a, b, c) t =
+   fun kind layout dims ->
+    let zero : a =
+      match kind with
+      | Float32 -> 0.
+      | Float64 -> 0.
+      | Char -> '\000'
+      | Nativeint -> Nativeint.of_int 0
+      | Complex64 -> Complex.zero
+    in
+    { kind; layout; data = Array.make (Array.fold_left ( * ) 1 dims) zero }
+
+  let get t _ = t.data.(0)
+  let set t _ v = t.data.(0) <- v
+end
+
+module Array1 = struct
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) Genarray.t
+
+  let create k l n = Genarray.create k l [| n |]
+  let get t _ = Genarray.get t [||]
+  let set t _ = Genarray.set t [||]
+end
+
+module Array2 = struct
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) Genarray.t
+
+  let create k l n m = Genarray.create k l [| n; m |]
+  let get t _ _ = Genarray.get t [||]
+  let set t _ _ = Genarray.set t [||]
+end
+
+module Array3 = struct
+  type (!'a, !'b, !'c) t = ('a, 'b, 'c) Genarray.t
+
+  let create k l n m o = Genarray.create k l [| n; m; o |]
+  let get t _ _ _ = Genarray.get t [||]
+  let set t _ _ _ = Genarray.set t [||]
+end

@@ -1,0 +1,2 @@
+FROM debian:13
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git make gcc patch python3 unzip xz-utils && rm -rf /var/lib/apt/lists/*

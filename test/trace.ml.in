@@ -1,0 +1,189 @@
+[@@@ai_disclosure "ai-generated"]
+[@@@ai_provider "Anthropic, OpenAI"]
+
+module B = Backend.Bigarray
+module N = Backend.Nativeint
+
+let emit key value = print_endline (key ^ "\t" ^ value)
+let fbits x = if Float.is_nan x then "nan" else Printf.sprintf "%016Lx" (Int64.bits_of_float x)
+let ibits x = Printf.sprintf "%016Lx" x
+let invalid key f =
+  try f (); failwith (key ^ ": expected Invalid_argument") with
+  | Invalid_argument message -> emit key "Invalid_argument"; prerr_endline (key ^ ": " ^ message)
+
+type packed = K : string * ('a,'b) B.kind * (int -> 'a) * ('a -> string) -> packed
+let kinds = [|
+  K ("float32", B.float32, (fun n -> float n /. 7.), fbits);
+  K ("float64", B.float64, (fun n -> float n /. 7.), fbits);
+  K ("int8_signed", B.int8_signed, (fun n -> n * 111), string_of_int);
+  K ("int8_unsigned", B.int8_unsigned, (fun n -> n * 111), string_of_int);
+  K ("int16_signed", B.int16_signed, (fun n -> n * 11111), string_of_int);
+  K ("int16_unsigned", B.int16_unsigned, (fun n -> n * 11111), string_of_int);
+  K ("int32", B.int32, (fun n -> Int32.mul (Int32.of_int n) 123456789l), Int32.to_string);
+  K ("int64", B.int64, (fun n -> Int64.logxor 0x89abcdef01234567L (Int64.of_int n)), ibits);
+  K ("int", B.int, (fun n -> n * 99), string_of_int);
+  K ("nativeint", B.nativeint, (fun n -> N.of_int (n * 99)), (fun x -> string_of_int (N.to_int x)));
+  K ("complex32", B.complex32, (fun n -> {Complex.re = float n /. 7.; im = float (-n) /. 13.}), (fun z -> fbits z.Complex.re ^ "," ^ fbits z.Complex.im));
+  K ("complex64", B.complex64, (fun n -> {Complex.re = float n /. 7.; im = float (-n) /. 13.}), (fun z -> fbits z.Complex.re ^ "," ^ fbits z.Complex.im));
+  K ("char", B.char, (fun n -> Char.chr (n land 255)), (fun c -> string_of_int (Char.code c)));
+  (* FLOAT16_KIND *)
+|]
+
+let scalar_and_vector : type a b c. string -> (a,b) B.kind -> c B.layout -> (int -> a) -> (a -> string) -> unit =
+ fun name kind layout value encode ->
+  let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
+  let key = name ^ "/" ^ string_of_int base ^ "/" in
+  let a = B.Array1.init kind layout 8 (fun i -> value (i - base - 3)) in
+  let observe label =
+    emit (key ^ label) (String.concat ";" (List.init 8 (fun i -> encode (B.Array1.get a (i + base)))))
+  in
+  assert (B.Array1.dim a = 8);
+  assert (B.Array1.kind a = kind);
+  assert (B.Array1.layout a = layout);
+  assert (B.Array1.size_in_bytes a = 8 * B.kind_size_in_bytes kind);
+  observe "init";
+  B.Array1.unsafe_set a base (value 39);
+  emit (key ^ "unsafe") (encode (B.Array1.unsafe_get a base));
+  let view = B.Array1.sub a (base + 2) 4 in
+  B.Array1.fill view (value 41);
+  observe "fill-view";
+  let chain = B.Array1.sub view (base + 1) 1 in
+  B.Array1.set chain base (value 43);
+  observe "chained-sub";
+  B.Array1.blit (B.Array1.sub a base 6) (B.Array1.sub a (base + 1) 6);
+  observe "overlap-forward";
+  B.Array1.blit (B.Array1.sub a (base + 1) 6) (B.Array1.sub a base 6);
+  observe "overlap-backward";
+  let scalar = B.Array1.slice a (base + 3) in
+  B.Array0.set scalar (value 47);
+  assert (B.Array0.kind scalar = kind);
+  assert (B.Array0.layout scalar = layout);
+  assert (B.Array0.size_in_bytes scalar = B.kind_size_in_bytes kind);
+  observe "slice";
+  let created = B.Array0.create kind layout in
+  B.Array0.set created (value 48);
+  emit (key ^ "scalar-create") (encode (B.Array0.get created));
+  assert (a == B.Array1.change_layout a layout);
+  let other = B.Array0.of_value kind layout (value 51) in
+  B.Array0.blit other scalar;
+  B.Array0.fill other (value 53);
+  emit (key ^ "scalar-fill") (encode (B.Array0.get other));
+  let initialized = B.Array0.init kind layout (value 55) in
+  emit (key ^ "scalar-init") (encode (B.Array0.get initialized));
+  let scalar_gen = B.genarray_of_array0 scalar in
+  B.Genarray.set scalar_gen [||] (value 57);
+  emit (key ^ "scalar-generic") (encode (B.Array0.get (B.array0_of_genarray scalar_gen)));
+  let generic = B.genarray_of_array1 view in
+  B.Genarray.set generic [|base|] (value 59);
+  emit (key ^ "generic") (encode (B.Array1.get (B.array1_of_genarray generic) base));
+  assert (B.Genarray.num_dims generic = 1);
+  assert (B.Genarray.nth_dim generic 0 = 4);
+  assert (B.Genarray.dims generic = [|4|]);
+  assert (B.Genarray.size_in_bytes generic = 4 * B.kind_size_in_bytes kind);
+  let dims = B.Genarray.dims generic in dims.(0) <- 91;
+  assert (B.Genarray.nth_dim generic 0 = 4);
+  let reshaped = B.reshape_0 scalar_gen in
+  B.Array0.set reshaped (value 61);
+  emit (key ^ "reshape-scalar") (encode (B.Array0.get scalar));
+  let from_array = B.Array1.of_array kind layout [|value 1; value 2; value 3|] in
+  emit (key ^ "of-array") (encode (B.Array1.get from_array base));
+  B.Array1.blit (B.Array1.sub a base 0) (B.Array1.sub a (base + 8) 0);
+  invalid (key ^ "negative-size") (fun () -> ignore (B.Array1.create kind layout (-1)));
+  invalid (key ^ "bounds-low") (fun () -> ignore (B.Array1.get a (base - 1)));
+  invalid (key ^ "bounds-high") (fun () -> B.Array1.set a (base + 8) (value 0));
+  invalid (key ^ "sub-bounds") (fun () -> ignore (B.Array1.sub a (base + 8) 1));
+  invalid (key ^ "blit-shape") (fun () -> B.Array1.blit a from_array);
+  invalid (key ^ "rank-conversion") (fun () -> ignore (B.array0_of_genarray generic));
+  invalid (key ^ "nth-dim") (fun () -> ignore (B.Genarray.nth_dim generic 1));
+  invalid (key ^ "wrong-indices") (fun () -> ignore (B.Genarray.get generic [||]));
+  let changed = B.Array1.change_layout a B.fortran_layout in
+  B.Array1.set changed 1 (value 63);
+  emit (key ^ "changed") (encode (B.Array1.get a base));
+  let scalar_changed = B.Array0.change_layout scalar B.c_layout in
+  B.Array0.set scalar_changed (value 65);
+  emit (key ^ "scalar-changed") (encode (B.Array0.get scalar))
+
+let goldens () =
+  let open B in
+  let a = Array1.of_array int8_signed c_layout [|255;128;-129|] in
+  assert (List.init 3 (Array1.get a) = [-1;-128;127]);
+  let a = Array1.of_array int16_unsigned c_layout [|-1;65536;65537|] in
+  assert (List.init 3 (Array1.get a) = [65535;0;1]);
+  let a = Array1.of_array float32 c_layout [|1.00000006; -0.|] in
+  assert (fbits (Array1.get a 0) = "3ff0000020000000");
+  assert (fbits (Array1.get a 1) = "8000000000000000");
+  let a = Array1.of_array int64 c_layout [|Int64.min_int; Int64.max_int; -1L; 0x123456789abcdefL|] in
+  assert (List.init 4 (Array1.get a) = [Int64.min_int;Int64.max_int;-1L;0x123456789abcdefL]);
+  let bits = Array.init 64 (fun i -> Int64.shift_left 1L i) in
+  let exact = Array1.of_array int64 c_layout bits in
+  Array.iteri (fun i value -> assert (Array1.get exact i = value); Array1.set exact i (Int64.lognot value); assert (Array1.get exact i = Int64.lognot value)) bits;
+  let complex = Array1.of_array complex32 c_layout [|{Complex.re = 1.00000006; im = -1.00000006}|] in
+  let z = Array1.get complex 0 in
+  assert (fbits z.Complex.re = "3ff0000020000000");
+  assert (fbits z.Complex.im = "bff0000020000000");
+  let dims = [|2|] in
+  let g = Genarray.create int c_layout dims in
+  dims.(0) <- 8; assert (Genarray.nth_dim g 0 = 2);
+  Genarray.fill g 9; assert (Genarray.get g [|1|] = 9);
+  emit "goldens" "passed"
+
+let rng = ref 0x13579bdfl
+let draws = ref []
+let random n =
+  rng := Int32.add (Int32.mul !rng 1664525l) 1013904223l;
+  let v = Int32.to_int (Int32.logand !rng 0x7fffffffl) mod n in
+  draws := (n,v) :: !draws; v
+
+let property : type a b c. int -> (a,b) B.kind -> c B.layout -> (int -> a) -> (a -> string) -> unit =
+ fun id kind layout value encode ->
+  let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
+  rng := Int32.add 0x13579bdfl (Int32.mul (Int32.of_int id) 104729l);
+  draws := [];
+  let length = Backend.shape "vector" 0 (4 + random 12) in
+  let a = B.Array1.init kind layout length (fun i -> value (i - base)) in
+  let operations = 8 + random 16 in
+  for step = 1 to operations do
+    match random 4 with
+    | 0 ->
+        let index = base + random length in
+        let next = value (random 65535 - 32768) in
+        Backend.perform "vector" step (fun () -> B.Array1.set a index next)
+    | 1 ->
+        let n = random (length + 1) in
+        let start = random (length - n + 1) in
+        let next = value (random 65535 - 32768) in
+        Backend.perform "vector" step (fun () -> B.Array1.fill (B.Array1.sub a (base + start) n) next)
+    | 2 ->
+        let n = random (length + 1) in
+        let source = random (length - n + 1) in
+        let target = random (length - n + 1) in
+        Backend.perform "vector" step (fun () -> B.Array1.blit (B.Array1.sub a (base + source) n) (B.Array1.sub a (base + target) n))
+    | _ ->
+        let i = random length in
+        let next = value (random 65535 - 32768) in
+        Backend.perform "vector" step (fun () ->
+          let scalar = B.Array1.slice a (base + i) in B.Array0.set scalar next)
+  done;
+  Multidimensional.property id random kind layout value encode;
+  emit ("input/" ^ string_of_int id)
+    (String.concat ";" (List.map (fun (n,v) -> string_of_int n ^ ":" ^ string_of_int v) (List.rev !draws)));
+  emit ("trace/" ^ string_of_int id) (String.concat ";" (List.init length (fun i -> encode (B.Array1.get a (base+i)))))
+
+let () =
+  Backend.boundaries ();
+  goldens ();
+  Ops.special ();
+  Array.iter (fun (K (name,kind,value,encode)) ->
+    scalar_and_vector name kind B.c_layout value encode;
+    scalar_and_vector name kind B.fortran_layout value encode;
+    Multidimensional.exercise name kind B.c_layout value encode;
+    Multidimensional.exercise name kind B.fortran_layout value encode;
+    Ops.exercise name kind B.c_layout value;
+    Ops.exercise name kind B.fortran_layout value) kinds;
+  List.iter (fun id ->
+    let K (_,kind,value,encode) = kinds.(id mod Array.length kinds) in
+    if (id / Array.length kinds) mod 2 = 0 then property id kind B.c_layout value encode
+    else property id kind B.fortran_layout value encode
+  ) Backend.trace_ids;
+  (* FLOAT16_TESTS *)
+  emit "summary/traces" (string_of_int Backend.trace_count)

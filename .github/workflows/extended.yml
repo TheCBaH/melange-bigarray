@@ -34,7 +34,7 @@ jobs:
           password: ''
       - name: Extended independent traces
         run: ${{ steps.container.outputs.exec }} env BROWSER_ENGINE=${{ matrix.engine }} EXTENDED_TRACE_ONLY=1 make deps oracle.prepare test.stress tree.check
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: extended-${{ matrix.ocaml }}-${{ matrix.runner }}-${{ matrix.engine }}

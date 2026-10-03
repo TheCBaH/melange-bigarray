@@ -10,7 +10,8 @@ build:
 api.check: build
 	$(NODE) $(BUILD_DIR)/default/spike/output/spike/probe.js
 	BUILD_DIR=$(BUILD_DIR) $(OPAM) exec -- $(PYTHON) tools/spike.py
-test.install: api.check
+test.install: oracle.prepare
+	$(PYTHON) tools/install.py
 oracle.prepare:
 	$(PYTHON) tools/prepare_oracles.py
 format:
@@ -19,16 +20,19 @@ format:
 deps:
 	$(OPAM) exec -- $(PYTHON) tools/check_tools.py
 	npm ci
-	npx playwright install --with-deps chromium --only-shell
+	npx playwright install --with-deps $(or $(BROWSER_ENGINE),chromium)
 tools.check:
 	$(OPAM) exec -- $(PYTHON) tools/check_tools.py
 test.offline:
 	bash tools/offline.sh $(MAKE) test.differential
-ci: tools.check oracle.prepare api.check format test.offline
+ci: deps tools.check oracle.prepare api.check format
+	$(MAKE) test.offline
+	$(MAKE) test.replay
+	$(MAKE) bench
+	$(MAKE) test.install
 	$(MAKE) tree.check
 clean:
-	$(OPAM) exec -- $(DUNE) clean --build-dir $(BUILD_DIR)
-	rm -rf .cache/spike
+	$(PYTHON) tools/clean.py
 tree.check:
 	git diff --exit-code
 	test -z "$$(git status --porcelain)"
@@ -48,4 +52,8 @@ test.differential: test.node test.browser
 	BUILD_DIR=$(BUILD_DIR) $(OPAM) exec -- $(PYTHON) tools/traces.py compare
 test.unit runtest test.properties: test.differential
 test.stress:
-	TRACE_COUNT=10000 $(MAKE) test.differential
+	TRACE_COUNT=10000 $(MAKE) test.offline
+bench: traces.build
+	$(OPAM) exec -- $(PYTHON) tools/bench.py
+test.replay:
+	bash tools/offline.sh $(OPAM) exec -- $(PYTHON) tools/replay_check.py

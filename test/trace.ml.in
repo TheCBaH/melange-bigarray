@@ -128,37 +128,45 @@ let goldens () =
   emit "goldens" "passed"
 
 let rng = ref 0x13579bdfl
+let draws = ref []
 let random n =
   rng := Int32.add (Int32.mul !rng 1664525l) 1013904223l;
-  Int32.to_int (Int32.logand !rng 0x7fffffffl) mod n
+  let v = Int32.to_int (Int32.logand !rng 0x7fffffffl) mod n in
+  draws := (n,v) :: !draws; v
 
 let property : type a b c. int -> (a,b) B.kind -> c B.layout -> (int -> a) -> (a -> string) -> unit =
  fun id kind layout value encode ->
   let base = match layout with B.C_layout -> 0 | B.Fortran_layout -> 1 in
-  let length = 4 + random 12 in
+  rng := Int32.add 0x13579bdfl (Int32.mul (Int32.of_int id) 104729l);
+  draws := [];
+  let length = Backend.shape "vector" 0 (4 + random 12) in
   let a = B.Array1.init kind layout length (fun i -> value (i - base)) in
   let operations = 8 + random 16 in
-  for _ = 1 to operations do
+  for step = 1 to operations do
     match random 4 with
     | 0 ->
         let index = base + random length in
         let next = value (random 65535 - 32768) in
-        B.Array1.set a index next
+        Backend.perform "vector" step (fun () -> B.Array1.set a index next)
     | 1 ->
         let n = random (length + 1) in
         let start = random (length - n + 1) in
-        B.Array1.fill (B.Array1.sub a (base + start) n) (value (random 65535 - 32768))
+        let next = value (random 65535 - 32768) in
+        Backend.perform "vector" step (fun () -> B.Array1.fill (B.Array1.sub a (base + start) n) next)
     | 2 ->
         let n = random (length + 1) in
         let source = random (length - n + 1) in
         let target = random (length - n + 1) in
-        B.Array1.blit (B.Array1.sub a (base + source) n) (B.Array1.sub a (base + target) n)
+        Backend.perform "vector" step (fun () -> B.Array1.blit (B.Array1.sub a (base + source) n) (B.Array1.sub a (base + target) n))
     | _ ->
         let i = random length in
-        let scalar = B.Array1.slice a (base + i) in
-        B.Array0.set scalar (value (random 65535 - 32768))
+        let next = value (random 65535 - 32768) in
+        Backend.perform "vector" step (fun () ->
+          let scalar = B.Array1.slice a (base + i) in B.Array0.set scalar next)
   done;
   Multidimensional.property id random kind layout value encode;
+  emit ("input/" ^ string_of_int id)
+    (String.concat ";" (List.map (fun (n,v) -> string_of_int n ^ ":" ^ string_of_int v) (List.rev !draws)));
   emit ("trace/" ^ string_of_int id) (String.concat ";" (List.init length (fun i -> encode (B.Array1.get a (base+i)))))
 
 let () =
@@ -172,10 +180,10 @@ let () =
     Multidimensional.exercise name kind B.fortran_layout value encode;
     Ops.exercise name kind B.c_layout value;
     Ops.exercise name kind B.fortran_layout value) kinds;
-  for id = 0 to Backend.trace_count - 1 do
+  List.iter (fun id ->
     let K (_,kind,value,encode) = kinds.(id mod Array.length kinds) in
-    if id mod 2 = 0 then property id kind B.c_layout value encode
+    if (id / Array.length kinds) mod 2 = 0 then property id kind B.c_layout value encode
     else property id kind B.fortran_layout value encode
-  done;
+  ) Backend.trace_ids;
   (* FLOAT16_TESTS *)
   emit "summary/traces" (string_of_int Backend.trace_count)

@@ -6,5 +6,5 @@ const version=process.env.OCAML_VERSION;
 const B=require(path.join(root,'.cache/traces',version,'melange/_build/default/output/node_modules/melange-bigarray/melange_bigarray.js'));
 const report=require('./interop_cases.cjs')(B,code=>vm.runInNewContext(code),Buffer);
 report.node=process.version;
-fs.writeFileSync(path.join(root,'.cache/reports',version,'interop-node.json'),JSON.stringify(report,null,2)+'\n');
+fs.writeFileSync(path.join(process.env.REPORT_DIR||path.join(root,'.cache/reports',version),'interop-node.json'),JSON.stringify(report,null,2)+'\n');
 console.log(`Node interop: ${report.count} cases passed`);

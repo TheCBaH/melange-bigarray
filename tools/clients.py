@@ -8,11 +8,11 @@ import subprocess
 
 root = pathlib.Path(__file__).resolve().parents[1]
 version = subprocess.check_output(['ocamlc', '-version'], text=True).strip()
-work = root / '.cache/clients' / version
+work = pathlib.Path(os.environ.get('CLIENT_WORK',str(root / '.cache/clients' / version)))
 if work.exists():
     shutil.rmtree(work)
 work.mkdir(parents=True)
-reports = root / '.cache/reports' / version
+reports = pathlib.Path(os.environ.get('REPORT_DIR',str(root / '.cache/reports' / version)))
 reports.mkdir(parents=True, exist_ok=True)
 prefix = pathlib.Path(os.environ.get('CLIENT_PREFIX', str(root / '.cache/traces' / version / 'installed')))
 env = dict(os.environ, OCAMLPATH=str(prefix / 'lib'))

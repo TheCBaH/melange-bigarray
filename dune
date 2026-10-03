@@ -6,4 +6,8 @@
   licenses/OCaml-notice.txt
   docs/api-inventory.md
   docs/compatibility.md
-  docs/provenance.md))
+  docs/provenance.md
+  docs/differences.md
+  docs/interop-and-ops.md
+  docs/performance.md
+  docs/verification.md))

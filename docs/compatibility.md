@@ -18,5 +18,5 @@ representation without Obj.magic. Unsupported literals are a required
 negative test. Native applications keep using Stdlib.Nativeint.
 
 The 4.14 interface omits Float16 entirely; generation selects the type,
-constructor and value on OCaml 5.x. These are API/compiler checks only;
-the compatibility spike is not a working storage implementation.
+constructor and value on OCaml 5.x. Both interfaces are backed by the full in-memory implementation and required
+differential/runtime checks.

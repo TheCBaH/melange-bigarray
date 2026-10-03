@@ -1,5 +1,9 @@
 # Melange Bigarray
 
+[![ci](https://github.com/TheCBaH/melange-bigarray/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TheCBaH/melange-bigarray/actions/workflows/ci.yml)
+[![extended](https://github.com/TheCBaH/melange-bigarray/actions/workflows/extended.yml/badge.svg?branch=main)](https://github.com/TheCBaH/melange-bigarray/actions/workflows/extended.yml)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/TheCBaH/melange-bigarray)
+
 Portable in-memory numerical arrays for Melange: the versioned Bigarray API,
 shared multidimensional views, typed-array interop and explicit comparison/hash.
 
